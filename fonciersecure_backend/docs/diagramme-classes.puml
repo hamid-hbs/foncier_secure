@@ -1,0 +1,269 @@
+@startuml
+!theme plain
+hide empty members
+
+title Diagramme de classes — FoncierSecure
+
+' Couleurs
+skinparam classBackgroundColor #F5F5F5
+skinparam classBorderColor #2D6A4F
+skinparam classHeaderBackgroundColor #2D6A4F
+skinparam classFontColor white
+skinparam classFontStyle bold
+
+class User {
+  + id: int
+  + nom: string
+  + prenom: string
+  + email: string
+  + telephone: string
+  + role: enum
+  + indice_confiance: int
+  + is_active: boolean
+}
+
+class Professionnel {
+  + id: int
+  + user_id: int
+  + type: enum
+  + cabinet: string
+  + zone_intervention: string
+  + note_moyenne: float
+}
+
+class RoleRequest {
+  + id: int
+  + user_id: int
+  + role_demande: enum
+  + statut: enum
+  + document_justificatif: string
+}
+
+class Parcelle {
+  + id: int
+  + code: string
+  + proprietaire_id: int
+  + titre: string
+  + description: string
+  + superficie: float
+  + prix_estimatif: float
+  + statut: enum
+  + commune_id: int
+  + arrondissement_id: int
+  + quartier_id: int
+}
+
+class Commune {
+  + id: int
+  + nom: string
+}
+
+class Arrondissement {
+  + id: int
+  + nom: string
+  + commune_id: int
+}
+
+class Quartier {
+  + id: int
+  + nom: string
+  + arrondissement_id: int
+}
+
+class DemandeAchat {
+  + id: int
+  + parcelle_id: int
+  + acheteur_id: int
+  + notaire_id: int
+  + message: text
+  + statut: enum
+}
+
+class DocumentDemande {
+  + id: int
+  + demande_id: int
+  + type_document: string
+  + nom_fichier: string
+  + hash_sha256: string
+}
+
+class DossierTransaction {
+  + id: int
+  + parcelle_id: int
+  + vendeur_id: int
+  + acheteur_id: int
+  + notaire_id: int
+  + titre: string
+  + statut: enum
+  + closed_at: datetime
+}
+
+class ValidationDossier {
+  + id: int
+  + dossier_id: int
+  + user_id: int
+  + valide_le: datetime
+}
+
+class DossierDocument {
+  + id: int
+  + dossier_id: int
+  + uploaded_by: int
+  + nom_fichier: string
+  + hash_sha256: string
+  + version: int
+}
+
+class DossierIntervenant {
+  + id: int
+  + dossier_id: int
+  + user_id: int
+  + role_dossier: string
+  + invite_par: int
+  + accepted_at: datetime
+}
+
+class DossierMessage {
+  + id: int
+  + dossier_id: int
+  + sender_id: int
+  + contenu: text
+}
+
+class DossierActivite {
+  + id: int
+  + dossier_id: int
+  + user_id: int
+  + action: string
+  + details: json
+}
+
+class VerificationIdentite {
+  + id: int
+  + dossier_id: int
+  + user_id: int
+  + document_verifie: string
+  + statut: enum
+  + verifie_par: int
+}
+
+class RendezVous {
+  + id: int
+  + dossier_id: int
+  + type: string
+  + date_prevue: datetime
+  + lieu: string
+  + statut: enum
+}
+
+class ConfirmationRendezVous {
+  + id: int
+  + rendez_vous_id: int
+  + user_id: int
+  + est_confirme: boolean
+}
+
+class InterventionGeometre {
+  + id: int
+  + dossier_id: int
+  + verification_id: int
+  + geometre_id: int
+  + mission: string
+  + statut: enum
+  + rapport_path: string
+  + avis: string
+}
+
+class Signalement {
+  + id: int
+  + signalant_id: int
+  + parcelle_id: int
+  + type: enum
+  + description: text
+  + statut: enum
+  + est_anonyme: boolean
+}
+
+class Mediation {
+  + id: int
+  + demandeur_id: int
+  + mediateur_id: int
+  + parcelle_id: int
+  + titre: string
+  + statut: enum
+  + solution: text
+}
+
+class SupportTicket {
+  + id: int
+  + user_id: int
+  + sujet: string
+  + message: text
+  + statut: enum
+  + priorite: enum
+  + assigned_to: int
+  + reponse: text
+}
+
+class BlockchainLog {
+  + id: int
+  + previous_hash: string
+  + current_hash: string
+  + action: string
+  + user_id: int
+  + module: string
+  + reference_id: int
+  + metadata: json
+}
+
+class Notification {
+  + id: int
+  + type: string
+  + data: json
+  + read_at: datetime
+}
+
+' ======== RELATIONS ========
+
+User "1" -- "0..*" Parcelle : proprietaire
+User "1" -- "0..*" DemandeAchat : acheteur
+User "1" -- "0..*" DossierTransaction : vendeur
+User "1" -- "0..*" DossierTransaction : acheteur
+User "1" -- "0..*" DossierTransaction : notaire
+User "1" -- "0..*" Professionnel
+User "1" -- "0..*" RoleRequest
+User "1" -- "0..*" SupportTicket
+User "1" -- "0..*" BlockchainLog
+User "1" -- "0..*" Signalement : signalant
+User "1" -- "0..*" Mediation : demandeur
+
+Parcelle "1" -- "0..*" DemandeAchat
+Parcelle "1" -- "0..*" DossierTransaction
+Parcelle "1" -- "0..*" Signalement
+Parcelle "1" -- "0..*" Mediation
+Parcelle "*" -- "1" Commune
+Parcelle "*" -- "1" Arrondissement
+Parcelle "*" -- "1" Quartier
+Commune "1" -- "0..*" Arrondissement
+Arrondissement "1" -- "0..*" Quartier
+
+DemandeAchat "1" -- "0..*" DocumentDemande
+
+DossierTransaction "1" -- "0..*" ValidationDossier
+DossierTransaction "1" -- "0..*" DossierDocument
+DossierTransaction "1" -- "0..*" DossierIntervenant
+DossierTransaction "1" -- "0..*" DossierMessage
+DossierTransaction "1" -- "0..*" DossierActivite
+DossierTransaction "1" -- "0..*" VerificationIdentite
+DossierTransaction "1" -- "0..*" RendezVous
+DossierTransaction "1" -- "0..*" InterventionGeometre
+
+RendezVous "1" -- "0..*" ConfirmationRendezVous
+
+note top of DossierTransaction : Cycle de vie :\nen_attente -> cree -> en_verification\n-> geometre_assigne -> rendezvous_planifie\n-> valide -> acte_signe\n-> mutation_en_cours -> cloture
+
+note top of Parcelle : Statuts :\nlibre, en_demande, en_transaction,\nvendue, conteste, litige
+
+note top of User : Rôles :\ncitoyen, geometre,\nnotaire, admin
+
+@enduml

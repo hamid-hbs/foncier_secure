@@ -1,0 +1,126 @@
+@startuml
+autonumber "<b>[00]</b>"
+hide footbox
+title Diagramme - Gestion d'un dossier de transaction (Notaire Central)
+
+actor Notaire
+actor Vendeur
+actor Acheteur
+actor Geometre
+
+boundary Frontend
+control API
+database DB
+control Blockchain
+
+== 1. Création ==
+
+Notaire -> Frontend : Creer dossier
+Frontend -> API : POST /transactions
+note right
+  Verifie role = notaire
+  Verifie vendeur = proprietaire
+end note
+API -> DB : DossierTransaction (statut: cree)
+API -> DB : Parcelle→statut = 'en_transaction'
+API -> DB : DossierActivite
+API -> Blockchain : log('transaction_created')
+API --> Frontend : 201 Dossier + relations
+
+== 2. Verifications identite ==
+
+Notaire -> Frontend : Verifier identite partie
+Frontend -> API : POST .../verifier-identite
+note right: Verifie notaire responsable
+API -> DB : VerificationIdentite (verifie|rejete)
+API -> DB : DossierActivite
+API --> Frontend : 200 Verification
+
+== 3. Assignation geometre ==
+
+Notaire -> Frontend : Assigner un geometre
+Frontend -> API : POST .../assigner-geometre
+note right
+  Verifie notaire responsable
+  Verifie role = geometre
+end note
+API -> DB : InterventionGeometre (statut: assigne)
+API -> DB : Dossier→statut = 'geometre_assigne'
+API -> DB : DossierActivite
+API -> Blockchain : log('geometre_assigne')
+API --> Frontend : 201 Intervention
+
+Geometre -> Frontend : Deposer rapport
+Frontend -> API : POST .../interventions/{id}/rapport
+note right: Verifie geometre assigne
+API -> API : Encrypte fichier + SHA-256
+API -> DB : Intervention→statut = 'rapport_recu'
+API -> DB : DossierActivite
+API -> Blockchain : log('rapport_geometre_favorable')
+API --> Frontend : 200 Intervention
+
+== 4. Rendez-vous ==
+
+Notaire -> Frontend : Planifier rendez-vous
+Frontend -> API : POST .../rendez-vous
+note right: Verifie notaire responsable
+API -> DB : RendezVous (statut: planifie)
+API -> DB : Dossier→statut = 'rendezvous_planifie'
+API -> DB : DossierActivite
+API -> Blockchain : log('rdv_planifie')
+API --> Frontend : 201 RendezVous
+
+Vendeur -> Frontend : Confirmer presence
+Acheteur -> Frontend : Confirmer presence
+Frontend -> API : POST .../rendez-vous/{id}/confirmer
+API -> DB : ConfirmationRendezVous
+alt Tous confirment
+  API -> DB : RendezVous→statut = 'confirme'
+end
+API --> Frontend : 200 Confirmation
+
+== 5. Validation ==
+
+Notaire -> Frontend : Valider dossier
+Frontend -> API : POST .../valider
+note right
+  Verifie >= 2 identites verifiees
+  Sinon 400
+end note
+API -> DB : Dossier→statut = 'valide'
+API -> DB : AnalyseDocumentaireService
+API -> DB : DossierActivite
+API -> Blockchain : log('dossier_valide')
+API --> Frontend : 200 Dossier
+
+== 6. Acte de vente ==
+
+Notaire -> Frontend : Generer acte
+Frontend -> API : POST .../generer-acte
+note right
+  Verifie notaire responsable
+  Genere PDF via DomPDF
+  Encrypte + SHA-256
+end note
+API -> DB : DossierDocument (acte_vente)
+API -> DB : Dossier→statut = 'acte_signe'
+API -> DB : DossierActivite
+API --> Frontend : 201 Document
+
+== 7. Mutation + Cloture ==
+
+Notaire -> Frontend : Avancer etape (×2)
+Frontend -> API : POST .../avancer
+note right
+  Avance 1 par 1 dans le flux:
+  mutation_en_cours → cloture
+end note
+API -> DB : Dossier→statut = 'mutation_en_cours'
+API -> DB : Dossier→statut = 'cloture'
+API -> DB : Parcelle→statut = 'vendue'
+API -> DB : IndiceConfiance += 15 (v/a), += 10 (notaire)
+API -> DB : DossierActivite
+API -> Blockchain : log('transaction_status_cloture')
+API --> Frontend : 200 Dossier
+
+@enduml

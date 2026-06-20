@@ -1,0 +1,57 @@
+@startuml
+autonumber "00."
+hide footbox
+title Création d'un dossier — Validation par les deux parties
+
+actor Notaire
+actor Vendeur
+actor Acheteur
+boundary Frontend
+control API
+database DB
+control BC
+
+== 1. Création du dossier en attente ==
+
+Notaire -> Frontend : Ouvrir un dossier
+Frontend -> API : POST /transactions { parcelle_id, vendeur_id, acheteur_id, titre }
+API -> API : Vérifier rôle = notaire, vendeur = propriétaire
+API -> DB : INSERT DossierTransaction (statut='en_attente', notaire_id, vendeur_id, acheteur_id)
+API -> DB : INSERT DossierActivite ("Dossier ouvert par le notaire, en attente de validation")
+API --> Frontend : 201 Dossier (statut: en_attente)
+
+== 2. Validation par le vendeur ==
+
+Frontend --> Vendeur : Notification - Valider le dossier
+Vendeur -> Frontend : Valider le dossier
+Frontend -> API : POST /transactions/{id}/valider-partie
+note right: Vérifie que c'est bien le vendeur
+API -> DB : INSERT validation (user_id = vendeur, date)
+
+alt Acheteur a déjà validé
+    API -> DB : Dossier.statut = 'cree'
+    API -> DB : DossierActivite ("Dossier confirmé par les deux parties")
+    API -> BC : log('transaction_created')
+    API --> Frontend : Dossier créé
+else
+    API --> Frontend : Validation enregistrée, en attente de l'acheteur
+end
+
+== 3. Validation par l'acheteur ==
+
+Frontend --> Acheteur : Notification - Valider le dossier
+Acheteur -> Frontend : Valider le dossier
+Frontend -> API : POST /transactions/{id}/valider-partie
+note right: Vérifie que c'est bien l'acheteur
+API -> DB : INSERT validation (user_id = acheteur, date)
+
+alt Vendeur a déjà validé
+    API -> DB : Dossier.statut = 'cree'
+    API -> DB : DossierActivite ("Dossier confirmé par les deux parties")
+    API -> BC : log('transaction_created')
+    API --> Frontend : Dossier créé
+else
+    API --> Frontend : Validation enregistrée, en attente du vendeur
+end
+
+@enduml

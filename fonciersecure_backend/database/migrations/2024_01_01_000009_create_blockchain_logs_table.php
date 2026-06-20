@@ -1,0 +1,29 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('blockchain_logs', function (Blueprint $table) {
+            $table->id();
+            $table->string('previous_hash', 64);
+            $table->string('current_hash', 64);
+            $table->string('action');
+            $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
+            $table->string('module')->nullable();
+            $table->integer('reference_id')->nullable();
+            $table->json('metadata')->nullable();
+            $table->timestamps();
+            $table->index(['module', 'reference_id']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('blockchain_logs');
+    }
+};

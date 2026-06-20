@@ -1,0 +1,21 @@
+@startuml
+autonumber "00."
+hide footbox
+title Soumettre une demande d'acquisition
+
+actor Citoyen
+boundary Frontend
+control API
+database DB
+
+Citoyen -> Frontend : Cliquer sur "Initier un achat"
+Frontend -> Citoyen : Afficher le formulaire (parcelle, message)
+Citoyen -> Frontend : Remplir et soumettre
+Frontend -> API : POST /api/demandes-achat { parcelle_id, message }
+API -> API : Vérifier rôle = citoyen, aucun doublon
+API -> DB : INSERT DemandeAchat (statut = 'soumise')
+API -> DB : UPDATE Parcelle SET statut = 'en_demande'
+API --> Frontend : 201 Demande créée
+Frontend --> Citoyen : Confirmation + statut "en attente de réponse"
+
+@enduml
