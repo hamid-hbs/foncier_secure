@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { goBack } from '@/utils/navigation'
 import transactionApi from '@/api/transaction'
@@ -9,312 +9,153 @@ const router = useRouter()
 
 const transaction = ref(null)
 const loading = ref(true)
-const activeTab = ref('info')
-const messageText = ref('')
-const sending = ref(false)
-const inviteEmail = ref('')
-const inviteRole = ref('notaire')
-const inviting = ref(false)
-const uploadFile = ref(null)
-const uploading = ref(false)
-const error = ref('')
-const validating = ref(false)
-const showNoterModal = ref(false)
-const note = ref(5)
-const commentaire = ref('')
-const noterLoading = ref(false)
 
 onMounted(async () => {
   try {
     const res = await transactionApi.show(route.params.id)
-    transaction.value = res.data
-  } catch { /* ignore */ }
+    transaction.value = res.data || null
+  } catch (e) { console.error('Erreur chargement transaction:', e) }
   loading.value = false
 })
 
-async function sendMessage() {
-  if (!messageText.value.trim()) return
-  sending.value = true
-  error.value = ''
-  try {
-    await transactionApi.sendMessage(route.params.id, { contenu: messageText.value })
-    messageText.value = ''
-    const res = await transactionApi.show(route.params.id)
-    transaction.value = res.data
-  } catch (e) {
-    error.value = e.response?.data?.message || "Erreur lors de l'envoi"
-  }
-  sending.value = false
+function statutBadgeClass(s) {
+  const map = { cree: 'badge-neutral', en_cours: 'badge-info', cloturee: 'badge-success', annulee: 'badge-danger' }
+  return map[s] || 'badge-neutral'
 }
 
-async function inviteProfessionnel() {
-  if (!inviteEmail.value.trim()) return
-  inviting.value = true
-  error.value = ''
-  try {
-    await transactionApi.inviter(route.params.id, { email: inviteEmail.value, role_dossier: inviteRole.value })
-    inviteEmail.value = ''
-    const res = await transactionApi.show(route.params.id)
-    transaction.value = res.data
-  } catch (e) {
-    error.value = e.response?.data?.message || "Erreur lors de l'invitation"
-  }
-  inviting.value = false
+function formatDate(d) {
+  if (!d) return '—'
+  return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-async function uploadDocument() {
-  if (!uploadFile.value) return
-  uploading.value = true
-  error.value = ''
-  try {
-    const fd = new FormData()
-    fd.append('fichier', uploadFile.value)
-    await transactionApi.addDocument(route.params.id, fd)
-    uploadFile.value = null
-    const res = await transactionApi.show(route.params.id)
-    transaction.value = res.data
-  } catch (e) {
-    error.value = e.response?.data?.message || "Erreur lors de l'upload"
-  }
-  uploading.value = false
-}
-
-async function validerPartie() {
-  if (!confirm('Confirmez-vous la validation de votre participation ?')) return
-  validating.value = true
-  error.value = ''
-  try {
-    await transactionApi.validerPartie(route.params.id)
-    const res = await transactionApi.show(route.params.id)
-    transaction.value = res.data
-  } catch (e) {
-    error.value = e.response?.data?.message || "Erreur lors de la validation"
-  }
-  validating.value = false
-}
-
-async function submitNote() {
-  noterLoading.value = true
-  error.value = ''
-  try {
-    await transactionApi.noterProfessionnel(route.params.id, { note: note.value, commentaire: commentaire.value })
-    showNoterModal.value = false
-    alert('Merci pour votre évaluation !')
-  } catch (e) {
-    error.value = e.response?.data?.message || "Erreur lors de l'envoi"
-  }
-  noterLoading.value = false
-}
-
-function statutClass(s) {
-  const map = {
-    cree: 'badge-info',
-    en_verification: 'badge-warning',
-    geometre_assigne: 'badge-warning',
-    rendezvous_planifie: 'badge-info',
-    valide: 'badge-success',
-    acte_signe: 'badge-success',
-    mutation_en_cours: 'badge-warning',
-    cloture: 'badge-success',
-  }
-  return map[s] || 'badge-info'
+const BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || ''
+function getDocUrl(chemin) {
+  if (!chemin) return '#'
+  if (chemin.startsWith('http')) return chemin
+  return `${BASE_URL}/storage/${chemin}`
 }
 </script>
 
 <template>
-  <div class="page-container max-w-4xl">
-    <div v-if="loading" class="flex-center py-16">
-      <div class="w-8 h-8 border-2 rounded-full animate-spin" style="border-color: var(--border); border-top-color: var(--green-tree);"></div>
+  <div class="page-wrap max-w-3xl mx-auto">
+    <!-- Loading -->
+    <div v-if="loading" class="space-y-4">
+      <div class="skeleton h-32 rounded-2xl"></div>
+      <div class="skeleton h-48 rounded-2xl"></div>
     </div>
 
-    <div v-else-if="!transaction" class="card text-center py-12">
-      <p style="color: var(--text-secondary);">Transaction introuvable.</p>
+    <!-- Not found -->
+    <div v-else-if="!transaction" class="card">
+      <div class="empty-state">
+        <div class="empty-icon"><i class="fas fa-file-signature"></i></div>
+        <p class="empty-title">Transaction introuvable</p>
+        <button @click="goBack(router)" class="btn btn-primary mt-4">Retour</button>
+      </div>
     </div>
 
     <template v-else>
-      <button @click="goBack(router)" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-        <i class="fas fa-arrow-left"></i> Retour
+      <button @click="goBack(router)" class="flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors mb-6">
+        <i class="fas fa-arrow-left text-xs"></i> Retour
       </button>
 
-      <div class="flex items-center gap-3 mb-6">
-        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: #DBEAFE;">
-          <i class="fas fa-arrows-left-right" style="color: #2563EB;"></i>
-        </div>
-        <div class="flex-1">
-          <h1 class="section-title">{{ transaction.titre || 'Transaction #' + transaction.id }}</h1>
-          <span class="text-xs px-2 py-1 rounded-full badge mt-1" :class="statutClass(transaction.statut)">{{ transaction.statut }}</span>
-        </div>
-      </div>
-
-      <div v-if="error" class="p-3.5 rounded-lg text-sm mb-4" style="background: #FEE2E2; color: var(--danger); border: 1px solid #FECACA;">
-        {{ error }}
-      </div>
-
-      <div class="flex gap-3 mb-6 flex-wrap">
-        <button v-if="transaction.statut !== 'cloture'" @click="validerPartie" :disabled="validating" class="btn-green btn-sm flex items-center gap-1">
-          <i class="fas fa-check-circle"></i> {{ validating ? '...' : 'Valider ma participation' }}
-        </button>
-        <button v-if="transaction.statut === 'cloture'" @click="showNoterModal = true" class="btn-gold btn-sm flex items-center gap-1">
-          <i class="fas fa-star"></i> Noter le professionnel
-        </button>
-      </div>
-
-      <div class="flex gap-1 mb-6 p-1 rounded-lg w-fit" style="background: var(--bg-page);">
-        <button @click="activeTab = 'info'" :class="['px-4 py-2 text-sm font-medium rounded-lg transition-all', activeTab === 'info' ? 'card shadow-sm' : '']" :style="activeTab === 'info' ? { color: 'var(--text-primary)' } : { color: 'var(--text-secondary)' }">Infos</button>
-        <button @click="activeTab = 'activites'" :class="['px-4 py-2 text-sm font-medium rounded-lg transition-all', activeTab === 'activites' ? 'card shadow-sm' : '']" :style="activeTab === 'activites' ? { color: 'var(--text-primary)' } : { color: 'var(--text-secondary)' }">Activités</button>
-        <button @click="activeTab = 'messages'" :class="['px-4 py-2 text-sm font-medium rounded-lg transition-all', activeTab === 'messages' ? 'card shadow-sm' : '']" :style="activeTab === 'messages' ? { color: 'var(--text-primary)' } : { color: 'var(--text-secondary)' }">Messages</button>
-        <button @click="activeTab = 'documents'" :class="['px-4 py-2 text-sm font-medium rounded-lg transition-all', activeTab === 'documents' ? 'card shadow-sm' : '']" :style="activeTab === 'documents' ? { color: 'var(--text-primary)' } : { color: 'var(--text-secondary)' }">Documents</button>
-        <button @click="activeTab = 'intervenants'" :class="['px-4 py-2 text-sm font-medium rounded-lg transition-all', activeTab === 'intervenants' ? 'card shadow-sm' : '']" :style="activeTab === 'intervenants' ? { color: 'var(--text-primary)' } : { color: 'var(--text-secondary)' }">Intervenants</button>
-      </div>
-
-      <div v-if="activeTab === 'info'" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="card">
-          <h3 class="font-semibold mb-4" style="color: var(--text-primary);">Participants</h3>
-          <dl class="divide-y text-sm" style="border-color: var(--border);">
-            <div class="flex justify-between py-3">
-              <dt style="color: var(--text-secondary);">Vendeur</dt>
-              <dd class="font-medium" style="color: var(--text-primary);">{{ transaction.vendeur?.nom || transaction.vendeur?.prenom || 'Vous' }}</dd>
-            </div>
-            <div class="flex justify-between py-3">
-              <dt style="color: var(--text-secondary);">Acheteur</dt>
-              <dd class="font-medium" style="color: var(--text-primary);">{{ transaction.acheteur?.nom || transaction.acheteur?.prenom || transaction.acheteur_email || 'En attente' }}</dd>
-            </div>
-            <div class="flex justify-between py-3">
-              <dt style="color: var(--text-secondary);">Parcelle</dt>
-              <dd class="font-medium" style="color: var(--text-primary);">{{ transaction.parcelle?.titre || transaction.parcelle?.code || '—' }}</dd>
-            </div>
-            <div class="flex justify-between py-3">
-              <dt style="color: var(--text-secondary);">Statut</dt>
-              <dd><span class="text-xs px-2 py-1 rounded-full badge" :class="statutClass(transaction.statut)">{{ transaction.statut }}</span></dd>
-            </div>
-          </dl>
-        </div>
-        <div class="card">
-          <h3 class="font-semibold mb-4" style="color: var(--text-primary);">Intervenants</h3>
-          <div v-if="transaction.intervenants?.length">
-            <div v-for="inv in transaction.intervenants" :key="inv.id" class="flex items-center justify-between py-2 text-sm border-b last:border-0" style="border-color: var(--border);">
-              <span style="color: var(--text-primary);">{{ inv.user?.nom || inv.user?.prenom || inv.email || '—' }}</span>
-              <span class="text-xs px-2 py-0.5 rounded-full" style="background: var(--bg-page); color: var(--text-secondary);">{{ inv.role_dossier || inv.role }}</span>
-            </div>
+      <!-- Header -->
+      <div class="card mb-5">
+        <div class="flex flex-col sm:flex-row sm:items-start gap-4">
+          <div class="w-14 h-14 rounded-2xl bg-gold/10 flex items-center justify-center text-gold-dark shrink-0">
+            <i class="fas fa-file-contract text-xl"></i>
           </div>
-          <p v-else class="text-sm" style="color: var(--text-secondary);">Aucun intervenant pour le moment.</p>
-        </div>
-      </div>
-
-      <div v-if="activeTab === 'activites'" class="card">
-        <h3 class="font-semibold mb-4 flex items-center gap-2" style="color: var(--text-primary);">
-          <i class="fas fa-clock" style="color: var(--green-tree);"></i> Fil d'activité
-        </h3>
-        <div v-if="transaction.activites?.length" class="space-y-3">
-          <div v-for="act in transaction.activites" :key="act.id" class="flex gap-3 p-3 rounded-lg" style="background: var(--bg-page);">
-            <div class="w-2 h-2 rounded-full mt-1.5 shrink-0" style="background: var(--green-tree);"></div>
-            <div>
-              <p class="text-sm font-medium" style="color: var(--text-primary);">{{ act.action || act.description || 'Mise à jour' }}</p>
-              <p class="text-xs mt-1" style="color: var(--text-secondary);">{{ act.created_at ? new Date(act.created_at).toLocaleString('fr-FR') : '' }}</p>
-            </div>
-          </div>
-        </div>
-        <p v-else class="text-sm" style="color: var(--text-secondary);">Aucune activité pour le moment.</p>
-      </div>
-
-      <div v-if="activeTab === 'messages'" class="card">
-        <h3 class="font-semibold mb-4 flex items-center gap-2" style="color: var(--text-primary);">
-          <i class="fas fa-comments" style="color: var(--green-tree);"></i> Messages
-        </h3>
-        <div v-if="transaction.messages?.length" class="space-y-3 mb-6 max-h-80 overflow-y-auto">
-          <div v-for="m in transaction.messages" :key="m.id" class="p-3 rounded-lg" style="background: var(--bg-page);">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-xs font-medium" style="color: var(--text-primary);">{{ m.expediteur?.nom || m.expediteur?.prenom || 'Inconnu' }}</span>
-              <span class="text-xs" style="color: var(--text-secondary);">{{ m.created_at ? new Date(m.created_at).toLocaleString('fr-FR') : '' }}</span>
-            </div>
-            <p class="text-sm" style="color: var(--text-primary);">{{ m.contenu || m.message }}</p>
-          </div>
-        </div>
-        <div v-else class="text-sm mb-6" style="color: var(--text-secondary);">Aucun message.</div>
-        <form @submit.prevent="sendMessage" class="flex gap-3">
-          <input v-model="messageText" class="form-input flex-1" placeholder="Votre message..." />
-          <button type="submit" :disabled="sending || !messageText.trim()" class="btn-green btn-sm flex items-center gap-1">
-            <i class="fas fa-paper-plane"></i> {{ sending ? '...' : 'Envoyer' }}
-          </button>
-        </form>
-      </div>
-
-      <div v-if="activeTab === 'documents'" class="card">
-        <h3 class="font-semibold mb-4 flex items-center gap-2" style="color: var(--text-primary);">
-          <i class="fas fa-file-lines" style="color: var(--green-tree);"></i> Documents
-        </h3>
-        <div v-if="transaction.documents?.length" class="space-y-2 mb-6">
-          <div v-for="doc in transaction.documents" :key="doc.id" class="flex items-center justify-between p-3 rounded-lg" style="background: var(--bg-page);">
-            <span class="text-sm font-medium" style="color: var(--text-primary);">{{ doc.nom_fichier || doc.nom || 'Document' }}</span>
-            <a :href="doc.url || `/storage/${doc.fichier}`" target="_blank" class="btn-outline btn-sm flex items-center gap-1">
-              <i class="fas fa-download"></i>
-            </a>
-          </div>
-        </div>
-        <div v-else class="text-sm mb-6" style="color: var(--text-secondary);">Aucun document.</div>
-        <form @submit.prevent="uploadDocument" class="flex gap-3 items-center">
-          <input type="file" @change="uploadFile = $event.target.files[0] || null" class="form-input flex-1" />
-          <button type="submit" v-if="uploadFile" :disabled="uploading" class="btn-green btn-sm">
-            {{ uploading ? 'Envoi...' : 'Ajouter' }}
-          </button>
-        </form>
-      </div>
-
-      <div v-if="activeTab === 'intervenants'" class="card">
-        <h3 class="font-semibold mb-4 flex items-center gap-2" style="color: var(--text-primary);">
-          <i class="fas fa-user-plus" style="color: var(--green-tree);"></i> Inviter un professionnel
-        </h3>
-        <p class="text-sm mb-5" style="color: var(--text-secondary);">Invitez un notaire ou géomètre.</p>
-        <form @submit.prevent="inviteProfessionnel" class="flex gap-3 items-end">
           <div class="flex-1">
-            <label class="form-label">Email</label>
-            <input v-model="inviteEmail" type="email" class="form-input" placeholder="email@exemple.com" />
-          </div>
-          <div>
-            <label class="form-label">Rôle</label>
-            <select v-model="inviteRole" class="form-select">
-              <option value="notaire">Notaire</option>
-              <option value="geometre">Géomètre</option>
-
-            </select>
-          </div>
-          <button type="submit" :disabled="inviting || !inviteEmail.trim()" class="btn-green btn-sm flex items-center gap-1">
-            <i class="fas fa-paper-plane"></i> {{ inviting ? '...' : 'Inviter' }}
-          </button>
-        </form>
-      </div>
-      <!-- Modal Noter -->
-      <Transition name="fade">
-        <div v-if="showNoterModal" @click="showNoterModal = false" class="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm" />
-      </Transition>
-      <Transition name="slide">
-        <div v-if="showNoterModal" class="fixed inset-0 z-50 flex items-center justify-center">
-          <div class="bg-white rounded-xl p-6 w-full max-w-md shadow-xl" @click.stop>
-            <h3 class="font-semibold mb-4" style="color: var(--text-primary);">Noter le professionnel</h3>
-            <p class="text-sm mb-4" style="color: var(--text-secondary);">Évaluez le service rendu par le notaire ou géomètre.</p>
-            <div class="space-y-4">
-              <div>
-                <label class="form-label">Note (1-5)</label>
-                <div class="flex gap-2">
-                  <button v-for="i in 5" :key="i" @click="note = i" class="w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all" :style="i <= note ? { background: 'var(--gold-light)', color: 'var(--gold)' } : { background: 'var(--bg-page)', color: 'var(--border)' }">
-                    <i class="fas fa-star"></i>
-                  </button>
-                </div>
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <h1 class="font-display font-extrabold text-xl text-stone-900">{{ transaction.titre || 'Transaction #' + transaction.id }}</h1>
+              <span class="badge" :class="statutBadgeClass(transaction.statut)">{{ transaction.statut }}</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+              <div class="px-4 py-3 rounded-xl bg-stone-50">
+                <p class="text-xs text-stone-400 font-medium">Vendeur</p>
+                <p class="text-sm font-bold text-stone-900 mt-0.5">{{ transaction.vendeur?.prenom }} {{ transaction.vendeur?.nom }}</p>
               </div>
-              <div>
-                <label class="form-label">Commentaire (optionnel)</label>
-                <textarea v-model="commentaire" class="form-input w-full" rows="3" placeholder="Votre avis..."></textarea>
+              <div class="px-4 py-3 rounded-xl bg-stone-50">
+                <p class="text-xs text-stone-400 font-medium">Acheteur</p>
+                <p class="text-sm font-bold text-stone-900 mt-0.5">{{ transaction.acheteur?.prenom }} {{ transaction.acheteur?.nom }}</p>
               </div>
-              <div class="flex gap-3 pt-2">
-                <button @click="submitNote" :disabled="noterLoading" class="btn-green">
-                  {{ noterLoading ? 'Envoi...' : 'Envoyer' }}
-                </button>
-                <button @click="showNoterModal = false" class="btn-outline">Annuler</button>
+              <div v-if="transaction.notaire" class="px-4 py-3 rounded-xl bg-stone-50">
+                <p class="text-xs text-stone-400 font-medium">Notaire</p>
+                <p class="text-sm font-bold text-stone-900 mt-0.5">Maître {{ transaction.notaire?.nom }}</p>
               </div>
             </div>
           </div>
         </div>
-      </Transition>
+      </div>
+
+      <!-- Details -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
+        <div class="card">
+          <h3 class="font-display font-bold text-stone-900 mb-4 flex items-center gap-2"><i class="fas fa-info-circle text-brand text-sm"></i> Détails</h3>
+          <div class="space-y-3">
+            <div v-if="transaction.parcelle" class="flex items-start gap-3 py-2 border-b border-stone-50">
+              <i class="fas fa-map-marker-alt text-stone-400 mt-0.5 w-4 text-center text-xs"></i>
+              <div>
+                <p class="text-xs text-stone-400">Parcelle</p>
+                <p class="text-sm font-bold text-stone-900">{{ transaction.parcelle?.titre || '#' + transaction.parcelle_id }}</p>
+              </div>
+            </div>
+            <div v-if="transaction.prix_final" class="flex items-start gap-3 py-2 border-b border-stone-50">
+              <i class="fas fa-tag text-gold mt-0.5 w-4 text-center text-xs"></i>
+              <div>
+                <p class="text-xs text-stone-400">Prix final</p>
+                <p class="text-sm font-bold text-stone-900">{{ Number(transaction.prix_final).toLocaleString('fr-FR') }} FCFA</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-3 py-2">
+              <i class="fas fa-calendar text-stone-400 mt-0.5 w-4 text-center text-xs"></i>
+              <div>
+                <p class="text-xs text-stone-400">Date</p>
+                <p class="text-sm font-bold text-stone-900">{{ formatDate(transaction.date_transaction || transaction.created_at) }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Timeline / étapes -->
+        <div class="card">
+          <h3 class="font-display font-bold text-stone-900 mb-4 flex items-center gap-2"><i class="fas fa-timeline text-brand text-sm"></i> Progression</h3>
+          <div class="space-y-3">
+            <div v-for="step in [
+              { key: 'cree', label: 'Dossier créé', icon: 'fa-plus' },
+              { key: 'en_cours', label: 'En cours', icon: 'fa-hourglass-half' },
+              { key: 'cloturee', label: 'Clôturée', icon: 'fa-check-double' },
+            ]" :key="step.key"
+            class="flex items-center gap-3"
+            :class="transaction.statut === step.key || (step.key === 'cree') ? 'opacity-100' : transaction.statut === 'annulee' ? 'opacity-30' : 'opacity-40'">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs"
+                :class="transaction.statut === step.key ? 'bg-brand text-white' : 'bg-stone-100 text-stone-400'">
+                <i :class="['fas', step.icon]"></i>
+              </div>
+              <span class="text-sm font-semibold" :class="transaction.statut === step.key ? 'text-stone-900' : 'text-stone-400'">{{ step.label }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Documents -->
+      <div v-if="transaction.documents?.length" class="card">
+        <h3 class="font-display font-bold text-stone-900 mb-4 flex items-center gap-2">
+          <i class="fas fa-folder-open text-brand text-sm"></i> Documents de la transaction
+        </h3>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <a v-for="doc in transaction.documents" :key="doc.id"
+            :href="getDocUrl(doc.chemin_fichier || doc.fichier)" target="_blank"
+            class="flex items-center gap-3 p-3 rounded-xl border border-stone-100 hover:border-brand-100 hover:bg-brand-50/20 transition-all">
+            <div class="w-9 h-9 rounded-lg bg-stone-100 flex items-center justify-center text-stone-500 text-sm shrink-0">
+              <i class="fas fa-file-pdf"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-bold text-stone-900 capitalize truncate">{{ doc.type_document || 'Document' }}</p>
+              <p class="text-[10px] text-stone-400">Voir le fichier</p>
+            </div>
+          </a>
+        </div>
+      </div>
     </template>
   </div>
 </template>

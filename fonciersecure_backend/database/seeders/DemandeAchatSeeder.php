@@ -3,79 +3,51 @@
 namespace Database\Seeders;
 
 use App\Models\DemandeAchat;
-use App\Models\DocumentDemande;
-use App\Models\Parcelle;
 use Illuminate\Database\Seeder;
 
 class DemandeAchatSeeder extends Seeder
 {
     public function run(): void
     {
-        $da1 = DemandeAchat::create([
-            'parcelle_id' => 1,
-            'acheteur_id' => 8,
-            'message' => 'Bonjour, je suis interessé par votre terrain à Ganhi. Pouvons-nous discuter du prix ?',
-            'statut' => 'acceptee',
-            'notaire_id' => 3,
-        ]);
-
-        Parcelle::where('id', 1)->update(['statut' => 'en_demande']);
-
-        DocumentDemande::create([
-            'demande_id' => $da1->id,
-            'type_document' => 'autre',
-            'nom_fichier' => 'offre_achat_ganhi.pdf',
-            'chemin_fichier' => 'demandes/1/offre_achat_ganhi.pdf',
-            'hash_sha256' => hash('sha256', 'offre_1'),
-            'taille' => 102400,
-            'uploaded_at' => now(),
-        ]);
-
-        $da2 = DemandeAchat::create([
-            'parcelle_id' => 4,
-            'acheteur_id' => 6,
-            'message' => 'Je souhaite acquerir votre terrain à Zogbadjè. Voici mon offre.',
-            'statut' => 'acceptee',
-            'notaire_id' => 9,
-        ]);
-
-        Parcelle::where('id', 4)->update(['statut' => 'en_demande']);
-
-        $da3 = DemandeAchat::create([
-            'parcelle_id' => 2,
-            'acheteur_id' => 8,
-            'message' => 'Je suis interessé par la parcelle à Gbégamey.',
-            'statut' => 'acceptee',
-            'notaire_id' => 3,
-        ]);
-
-        Parcelle::where('id', 2)->update(['statut' => 'en_demande']);
-
-        $da4 = DemandeAchat::create([
+        DemandeAchat::create([
             'parcelle_id' => 3,
-            'acheteur_id' => 7,
-            'message' => 'Offre d\'achat pour le terrain familial à Calavi.',
+            'acheteur_id' => 2,
+            'vendeur_id' => 4,
+            'message_acheteur' => 'Bonjour, je suis intéressé par votre terrain à Fidjrossè. Souhaitez-vous le vendre ?',
+            'statut' => 'soumise',
+            'date_soumise' => now()->subDays(5),
+        ]);
+
+        DemandeAchat::create([
+            'parcelle_id' => 5,
+            'acheteur_id' => 3,
+            'vendeur_id' => 7,
+            'message_acheteur' => 'Je souhaite acquérir votre parcelle à Ouando.',
             'statut' => 'acceptee',
-            'notaire_id' => 13,
+            'code_secret' => 'AC-2B4F9A',
+            'date_soumise' => now()->subDays(10),
+            'date_acceptee' => now()->subDays(3),
         ]);
 
-        Parcelle::where('id', 3)->update(['statut' => 'en_demande']);
+        DemandeAchat::create([
+            'parcelle_id' => 8,
+            'acheteur_id' => 2,
+            'vendeur_id' => 3,
+            'message_acheteur' => 'Intéressé par votre terrain à Kpébié.',
+            'statut' => 'notaire_sollicite',
+            'code_secret' => 'AC-7D3E11',
+            'notaire_id' => 9,
+            'date_soumise' => now()->subDays(7),
+        ]);
 
-        $da5 = DemandeAchat::create([
+        DemandeAchat::create([
             'parcelle_id' => 1,
-            'acheteur_id' => 6,
-            'message' => 'Je propose 12 millions pour le terrain Ganhi.',
+            'acheteur_id' => 7,
+            'vendeur_id' => 2,
             'statut' => 'refusee',
-        ]);
-
-        DocumentDemande::create([
-            'demande_id' => $da5->id,
-            'type_document' => 'autre',
-            'nom_fichier' => 'contre_offre_ganhi.pdf',
-            'chemin_fichier' => 'demandes/5/contre_offre_ganhi.pdf',
-            'hash_sha256' => hash('sha256', 'offre_5'),
-            'taille' => 51200,
-            'uploaded_at' => now(),
+            'date_soumise' => now()->subDays(15),
+            'date_refusee' => now()->subDays(10),
+            'raison_refus' => 'Le vendeur a trouvé un autre acheteur.',
         ]);
     }
 }

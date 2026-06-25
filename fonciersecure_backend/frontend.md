@@ -128,7 +128,8 @@ demandes_achat
   Logique metier:
     - L'acheteur soumet une demande sur une parcelle libre
     - Le vendeur repond (accepte/refuse) en choisissant un notaire si accepte
-    - Une fois acceptee, le notaire peut creer le dossier de transaction
+    - Une fois acceptee, le notaire accepte ou refuse via POST .../accepter ou .../refuser
+    - S'il accepte, le dossier de transaction est cree automatiquement
     - L'acheteur et le vendeur peuvent echanger des messages avant l'acceptation
 
 demande_messages
@@ -398,7 +399,7 @@ support_tickets
 
 ---
 
-## 3. Routes API complètes (v8 — 111 routes)
+## 3. Routes API complètes (v8 — 113 routes)
 
 Toutes les routes sont préfixées par `/api`.
 
@@ -464,6 +465,7 @@ GET    /transactions/{dossierTransaction}/documents    → [ DossierDocument { .
 GET    /transactions/{dossierTransaction}/messages     → [ DossierMessage { ..., sender } ]
 
 GET    /demandes-achat                                → paginé [ DemandeAchat { ..., parcelle, acheteur, notaire } ]
+                                            Note: citoyen voit ses demandes, notaire voit les siennes + demandes sans notaire
 GET    /demandes-achat/{demandeAchat}                  → DemandeAchat { ..., parcelle, acheteur, notaire, documents, messages }
 GET    /demandes-achat/{demandeAchat}/messages         → [ DemandeMessage { ..., sender } ]
 
@@ -530,6 +532,9 @@ POST   /transactions/{dossierTransaction}/valider              Payload: — (dé
 POST   /transactions/{dossierTransaction}/avancer              → avance d'un jalon (vérifie identités au passage à valide)
 POST   /transactions/{dossierTransaction}/generer-acte         → génère acte PDF, avance à 'acte_signe'
 POST   /transactions/{dossierTransaction}/export-pdf           → export PDF du dossier complet
+
+POST   /demandes-achat/{demandeAchat}/accepter                → crée automatiquement le dossier de transaction
+POST   /demandes-achat/{demandeAchat}/refuser                  Payload: motif (obligatoire) → parcelle libre
 
 POST   /transactions/{dossierTransaction}/inviter             Payload: user_id (ou email), role_dossier (notaire|geometre)
 GET    /transactions/{dossierTransaction}/intervenants        → [ DossierIntervenant ]
@@ -640,11 +645,13 @@ Tous les index endpoints utilisent la pagination Laravel :
 ```
 [Citoyen A] publie parcelle → POST /parcelles
       ↓
-[Citoyen B] soumet demande achat → POST /demandes-achat
+[Citoyen B] soumet demande achat → POST /demandes-achat (parcelle → 'en_demande')
       ↓
 [Citoyen A] répond avec choix notaire → PATCH /demandes-achat/{id}/repondre
-      ↓                         (parcelle → 'en_demande')
-[Notaire]   crée dossier → POST /transactions (statut → 'en_attente')
+      ↓                         (statut → 'acceptee', notaire choisi)
+[Notaire]   accepte la demande → POST /demandes-achat/{id}/accepter
+            (ou refuse avec motif → POST .../refuser)
+            ↓                  (dossier créé auto → 'en_attente')
       ↓
 [Vendeur + Acheteur] valident → POST .../valider-partie (statut → 'cree', parcelle → 'en_transaction')
       ↓
@@ -711,8 +718,9 @@ Tous les index endpoints utilisent la pagination Laravel :
 4. Le **géomètre est optionnel** : si aucun géomètre n'est assigné quand le dossier est en `en_verification`, l'étape `geometre_assigne` est sautée mais `rendezvous_planifie` reste obligatoire
 5. **Code parcelle** (`code` dans la réponse) : identifiant unique format `FS-XXXXX`, auto-généré. Utilisable via `?search=FS-00042`
 6. **Signalement et Médiation** ont été complètement supprimés de l'architecture — le notaire investigateur gère les litiges hors plateforme (suspension du dossier si nécessaire)
-7. **Factures** : cycle brouillon → envoyée → payée ; seul le notaire peut créer/envoyer/confirmer le paiement
-8. **Services géomètre indépendants** : un citoyen peut commander un levé topographique sans lien avec un dossier de transaction
-9. **Notation** : accessible uniquement après clôture du dossier, une seule note par professionnel par dossier
-10. **Support tickets** : ouverts par tout utilisateur, traités par les admins uniquement
-11. **Suspension** : tracée dans la blockchain avec le motif ; un dossier suspendu ne peut pas être avancé
+7. **Demande d'achat et notaire** : le vendeur choisit un notaire en acceptant la demande. Le notaire doit explicitement accepter (→ dossier créé auto) ou refuser avec motif (→ parcelle libre). Les routes `POST /demandes-achat/{id}/accepter` et `POST /demandes-achat/{id}/refuser` sont réservées au notaire.
+8. **Factures** : cycle brouillon → envoyée → payée ; seul le notaire peut créer/envoyer/confirmer le paiement
+9. **Services géomètre indépendants** : un citoyen peut commander un levé topographique sans lien avec un dossier de transaction
+10. **Notation** : accessible uniquement après clôture du dossier, une seule note par professionnel par dossier
+11. **Support tickets** : ouverts par tout utilisateur, traités par les admins uniquement
+12. **Suspension** : tracée dans la blockchain avec le motif ; un dossier suspendu ne peut pas être avancé

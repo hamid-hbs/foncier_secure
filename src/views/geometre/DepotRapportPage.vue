@@ -8,124 +8,156 @@ const route = useRoute()
 const router = useRouter()
 const verification = ref(null)
 const loading = ref(true)
-const fichier = ref(null)
-const avis = ref('favorable')
-const commentaire = ref('')
 const submitting = ref(false)
+const error = ref('')
+const success = ref(false)
+
+const form = ref({
+  note_risque: 'faible',
+  observations: '',
+  recommendations: '',
+  superficie_mesuree: '',
+  coordonnees_gps: '',
+})
+
+const risques = [
+  { value: 'faible', label: 'Faible', color: 'bg-success/10 text-success border-success/30' },
+  { value: 'moyen', label: 'Moyen', color: 'bg-warn/10 text-warn border-warn/30' },
+  { value: 'eleve', label: 'Élevé', color: 'bg-danger/10 text-danger border-danger/30' },
+]
 
 onMounted(async () => {
   try {
     const res = await verificationApi.show(route.params.id)
-    verification.value = res.data?.data || res.data
-  } catch { /* ignore */ }
+    verification.value = res.data || null
+  } catch (e) { console.error('Erreur chargement vérification:', e) }
   loading.value = false
 })
 
-function onFileChange(e) {
-  fichier.value = e.target.files[0] || null
-}
-
-async function deposerRapport() {
-  if (!fichier.value) {
-    alert('Veuillez sélectionner un fichier.')
-    return
-  }
+async function submit() {
   submitting.value = true
+  error.value = ''
   try {
-    const formData = new FormData()
-    formData.append('fichier', fichier.value)
-    formData.append('avis', avis.value)
-    if (commentaire.value.trim()) formData.append('commentaire', commentaire.value.trim())
-    await verificationApi.rapportGeometre(route.params.id, formData)
-    router.push('/geometre/missions')
-  } catch { alert('Erreur lors du dépôt du rapport') }
-  submitting.value = false
+    await verificationApi.rapport(route.params.id, form.value)
+    success.value = true
+    setTimeout(() => router.push('/geometre/missions'), 1800)
+  } catch (e) {
+    error.value = e.response?.data?.message || 'Erreur lors de la soumission du rapport'
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
 <template>
-  <div class="page-container" style="max-width: 700px;">
-    <div v-if="loading" class="flex-center py-16">
-      <div class="spinner"></div>
-    </div>
-
-    <div v-else-if="!verification" class="card text-center py-12">
-      <i class="fas fa-file-lines" style="font-size: 48px; color: var(--border); margin-bottom: 16px;"></i>
-      <p style="color: var(--text-secondary);">Mission introuvable.</p>
-    </div>
-
-    <template v-if="verification">
-      <button @click="goBack(router)" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-        <i class="fas fa-arrow-left"></i> Retour
+  <div class="page-wrap max-w-2xl mx-auto">
+    <div class="flex items-center gap-3 mb-8">
+      <button @click="goBack(router)" class="btn btn-ghost btn-icon text-stone-500">
+        <i class="fas fa-arrow-left"></i>
       </button>
-      <div class="flex items-center gap-3 mb-8">
-        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--bg-page); color: var(--green-tree);">
-          <i class="fas fa-file-lines"></i>
-        </div>
-        <div>
-          <h1 class="section-title">Déposer mon rapport</h1>
-          <p class="section-subtitle">Mission : {{ verification.titre || '#' + verification.id }}</p>
+      <div>
+        <h1 class="page-title">Rapport de vérification</h1>
+        <p class="page-subtitle">Mission #{{ route.params.id }}</p>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div v-if="loading" class="space-y-4">
+      <div class="skeleton h-24 rounded-2xl"></div>
+      <div class="skeleton h-64 rounded-2xl"></div>
+    </div>
+
+    <!-- Success -->
+    <div v-else-if="success" class="card">
+      <div class="empty-state py-12">
+        <div class="empty-icon bg-success/10 text-success"><i class="fas fa-check-double"></i></div>
+        <p class="empty-title">Rapport soumis !</p>
+        <p class="empty-text">Votre rapport de vérification a été transmis et sera examiné par l'administration.</p>
+      </div>
+    </div>
+
+    <template v-else>
+      <!-- Parcelle info -->
+      <div v-if="verification" class="card mb-5">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-brand-50 flex items-center justify-center text-brand shrink-0">
+            <i class="fas fa-map-marker-alt"></i>
+          </div>
+          <div>
+            <h3 class="font-display font-bold text-stone-900">{{ verification.parcelle?.titre || 'Parcelle #' + verification.parcelle_id }}</h3>
+            <p class="text-sm text-stone-400">{{ [verification.parcelle?.commune?.nom, verification.parcelle?.arrondissement?.nom].filter(Boolean).join(' · ') || 'Localisation inconnue' }}</p>
+          </div>
+          <div class="ml-auto">
+            <span class="badge badge-info">{{ verification.statut }}</span>
+          </div>
         </div>
       </div>
 
-      <div class="card mb-6">
-        <h3 class="text-lg font-semibold mb-4" style="color: var(--text-primary);">Informations de la mission</h3>
-        <dl class="divide-y text-sm" style="border-color: var(--border);">
-          <div class="flex justify-between py-3">
-            <dt style="color: var(--text-secondary);">Titre</dt>
-            <dd class="font-medium" style="color: var(--text-primary);">{{ verification.titre || '-' }}</dd>
-          </div>
-          <div class="flex justify-between py-3">
-            <dt style="color: var(--text-secondary);">Statut</dt>
-            <dd><span class="badge" :class="'badge-' + (verification.statut || 'soumis')">{{ verification.statut }}</span></dd>
-          </div>
-          <div v-if="verification.parcelle" class="flex justify-between py-3">
-            <dt style="color: var(--text-secondary);">Parcelle</dt>
-            <dd class="font-medium" style="color: var(--text-primary);">{{ verification.parcelle.code || verification.parcelle.nom || '#' + verification.parcelle.id }}</dd>
-          </div>
-          <div v-if="verification.parcelle?.commune" class="flex justify-between py-3">
-            <dt style="color: var(--text-secondary);">Commune</dt>
-            <dd class="font-medium" style="color: var(--text-primary);">{{ verification.parcelle.commune }}</dd>
-          </div>
-        </dl>
-      </div>
+      <!-- Form -->
+      <form @submit.prevent="submit" class="space-y-5">
+        <div v-if="error" class="alert alert-danger">
+          <i class="fas fa-triangle-exclamation shrink-0"></i>
+          <span>{{ error }}</span>
+        </div>
 
-      <div class="card">
-        <h3 class="text-lg font-semibold mb-4" style="color: var(--text-primary);">Rapport géomètre</h3>
-
-        <div class="form-group">
-          <label class="form-label">Fichier du rapport <span style="color: var(--danger);">*</span></label>
-          <div class="relative">
-            <input type="file" accept=".pdf,application/pdf,.jpg,.jpeg,.png" @change="onFileChange" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-            <div class="flex items-center gap-3 p-4 rounded-lg" style="border: 2px dashed var(--border); background: var(--bg-page);">
-              <i class="fas fa-upload" style="color: var(--green-tree);"></i>
-              <span class="text-sm" :style="{ color: fichier ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: fichier ? '600' : '400' }">
-                {{ fichier ? fichier.name : 'Cliquez pour sélectionner un fichier (PDF, JPG, PNG)' }}
-              </span>
+        <div class="card p-6 space-y-5">
+          <!-- Risque -->
+          <div>
+            <label class="form-label">Niveau de risque <span class="text-red-500">*</span></label>
+            <div class="grid grid-cols-3 gap-3">
+              <button
+                v-for="r in risques" :key="r.value"
+                type="button"
+                @click="form.note_risque = r.value"
+                class="py-3 px-4 rounded-xl border-2 font-bold text-sm transition-all"
+                :class="form.note_risque === r.value ? r.color + ' border-2' : 'border-stone-200 text-stone-500 hover:border-stone-300'"
+              >
+                {{ r.label }}
+              </button>
             </div>
           </div>
+
+          <!-- Superficie mesurée -->
+          <div>
+            <label class="form-label">Superficie mesurée (m²)</label>
+            <div class="relative">
+              <i class="fas fa-ruler-combined absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-sm pointer-events-none"></i>
+              <input v-model="form.superficie_mesuree" type="number" step="any" class="form-input pl-10 pr-10" placeholder="Résultat du mesurage" />
+              <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-sm pointer-events-none">m²</span>
+            </div>
+          </div>
+
+          <!-- Coordonnées GPS -->
+          <div>
+            <label class="form-label">Coordonnées GPS relevées</label>
+            <div class="relative">
+              <i class="fas fa-satellite-dish absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-sm pointer-events-none"></i>
+              <input v-model="form.coordonnees_gps" type="text" class="form-input pl-10 font-mono" placeholder="6.3654, 2.4183" />
+            </div>
+          </div>
+
+          <!-- Observations -->
+          <div>
+            <label class="form-label">Observations terrain <span class="text-red-500">*</span></label>
+            <textarea v-model="form.observations" rows="4" class="form-input resize-none" required placeholder="Décrivez l'état du terrain, les éventuels problèmes constatés, les limites exactes…"></textarea>
+          </div>
+
+          <!-- Recommandations -->
+          <div>
+            <label class="form-label">Recommandations</label>
+            <textarea v-model="form.recommendations" rows="3" class="form-input resize-none" placeholder="Actions recommandées, précautions particulières…"></textarea>
+          </div>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Avis <span style="color: var(--danger);">*</span></label>
-          <select v-model="avis" class="form-select">
-            <option value="favorable">Favorable</option>
-            <option value="defavorable">Défavorable</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Commentaire</label>
-          <textarea v-model="commentaire" class="form-textarea" rows="4" placeholder="Ajoutez vos observations..."></textarea>
-        </div>
-
-        <div class="flex gap-3 justify-end">
-          <button @click="router.push('/geometre/missions')" class="btn-outline btn-sm">Annuler</button>
-          <button @click="deposerRapport" :disabled="submitting || !fichier" class="btn-gold btn-sm flex items-center gap-1.5">
-            <i class="fas fa-upload"></i> {{ submitting ? 'Dépôt en cours...' : 'Déposer mon rapport' }}
+        <div class="flex gap-3">
+          <button type="submit" class="btn btn-primary btn-lg" :disabled="submitting">
+            <div v-if="submitting" class="spinner spinner-sm border-white/30 border-t-white"></div>
+            <i v-else class="fas fa-file-check"></i>
+            {{ submitting ? 'Soumission…' : 'Soumettre le rapport' }}
           </button>
+          <button type="button" @click="goBack(router)" class="btn btn-ghost">Annuler</button>
         </div>
-      </div>
+      </form>
     </template>
   </div>
 </template>

@@ -3,39 +3,68 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\RoleRequest;
+use App\Models\Role;
 use App\Models\User;
-use App\Helpers\EncryptionHelper;
-use App\Notifications\OtpNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
     public function register(Request $request): JsonResponse
     {
-        $validated = $request->validate([
+        $rules = [
             'nom' => 'required|string|max:100',
             'prenom' => 'required|string|max:100',
             'email' => 'required|email|unique:users',
             'telephone' => 'nullable|string|max:20',
             'password' => 'required|string|min:8|confirmed',
+            'role' => 'required|in:citoyen,geometre,notaire',
+            'type_piece_identite' => 'required|in:cnib,passeport',
+            'piece_identite' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+        ];
+
+        if ($request->input('role') !== 'citoyen') {
+            $rules['numero_enregistrement'] = 'required|string|max:50';
+            $rules['adresse_bureau'] = 'required|string|max:255';
+            $rules['specialisation'] = 'nullable|string|max:255';
+        }
+
+        $validated = $request->validate($rules);
+
+        $role = Role::where('nom', $validated['role'])->firstOrFail();
+
+        $path = $request->file('piece_identite')->store('identites');
+
+        $user = User::create([
+            'nom' => $validated['nom'],
+            'prenom' => $validated['prenom'],
+            'email' => $validated['email'],
+            'telephone' => $validated['telephone'] ?? null,
+            'password_hash' => Hash::make($validated['password']),
+            'role_id' => $role->id,
+            'type_piece_identite' => $validated['type_piece_identite'],
+            'piece_identite_path' => $path,
+            'is_active' => false,
         ]);
 
-        $validated['password'] = Hash::make($validated['password']);
-        $validated['role'] = 'citoyen';
-
-        $user = User::create($validated);
+        if ($validated['role'] !== 'citoyen') {
+            $user->professionnel()->create([
+                'type' => $validated['role'],
+                'numero_enregistrement' => $validated['numero_enregistrement'],
+                'date_enregistrement' => now()->toDateString(),
+                'adresse_bureau' => $validated['adresse_bureau'],
+                'specialisation' => $validated['specialisation'] ?? null,
+            ]);
+        }
 
         $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([
-            'user' => $user,
+            'user' => $user->load('role'),
             'token' => $token,
+            'message' => 'Inscription réussie. Votre compte est en attente de validation par un administrateur.',
         ], 201);
     }
 
@@ -48,18 +77,21 @@ class AuthController extends Controller
 
         $user = User::where('email', $validated['email'])->first();
 
-        if (!$user || !Hash::check($validated['password'], $user->password)) {
+        if (!$user || !Hash::check($validated['password'], $user->password_hash)) {
             return response()->json(['message' => 'Identifiants invalides'], 401);
         }
 
         if (!$user->is_active) {
-            return response()->json(['message' => 'Compte désactivé'], 403);
+            return response()->json([
+                'message' => 'Votre compte est en attente de validation par un administrateur.',
+                'code' => 'ACCOUNT_PENDING_APPROVAL',
+            ], 403);
         }
 
         $token = $user->createToken('auth-token')->plainTextToken;
 
         return response()->json([
-            'user' => $user,
+            'user' => $user->load('role'),
             'token' => $token,
         ]);
     }
@@ -67,13 +99,12 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()->delete();
-
         return response()->json(['message' => 'Déconnecté']);
     }
 
     public function profile(Request $request): JsonResponse
     {
-        return response()->json($request->user()->load('professionnel'));
+        return response()->json($request->user()->load(['role', 'professionnel']));
     }
 
     public function updateProfile(Request $request): JsonResponse
@@ -84,92 +115,35 @@ class AuthController extends Controller
             'nom' => 'sometimes|string|max:100',
             'prenom' => 'sometimes|string|max:100',
             'telephone' => 'sometimes|string|max:20',
+            'photo_profil' => 'sometimes|string|max:255',
         ]);
 
         $user->update($validated);
-
-        return response()->json($user);
+        return response()->json($user->load('role'));
     }
 
-    public function sendOtp(Request $request): JsonResponse
+    public function dashboard(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'email' => 'required|email|exists:users',
+        $user = $request->user()->load(['role', 'professionnel']);
+
+        return response()->json([
+            'user' => $user,
+            'is_active' => $user->is_active,
+            'status' => $user->is_active ? 'actif' : 'en_attente_validation',
+            'message' => $user->is_active
+                ? 'Bienvenue sur votre tableau de bord.'
+                : 'Votre compte est en attente de validation par un administrateur.',
         ]);
-
-        $user = User::where('email', $validated['email'])->first();
-        $otp = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-
-        $user->update([
-            'otp' => $otp,
-            'otp_expires_at' => now()->addMinutes(15),
-        ]);
-
-        $user->notify(new OtpNotification($otp));
-
-        return response()->json(['message' => 'OTP envoyé']);
-    }
-
-    public function resetPassword(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'email' => 'required|email|exists:users',
-            'otp' => 'required|string|size:6',
-            'password' => 'required|string|min:8|confirmed',
-        ]);
-
-        $user = User::where('email', $validated['email'])
-            ->where('otp', $validated['otp'])
-            ->where('otp_expires_at', '>', now())
-            ->first();
-
-        if (!$user) {
-            return response()->json(['message' => 'OTP invalide ou expiré'], 400);
-        }
-
-        $user->update([
-            'password' => Hash::make($validated['password']),
-            'otp' => null,
-            'otp_expires_at' => null,
-        ]);
-
-        return response()->json(['message' => 'Mot de passe réinitialisé']);
-    }
-
-    public function requestRole(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'role_demande' => 'required|in:geometre,notaire',
-            'document_justificatif' => 'required|file|mimes:pdf,jpg,png|max:5120',
-        ]);
-
-        $file = $request->file('document_justificatif');
-        $content = file_get_contents($file->getRealPath());
-        $path = 'role-requests/' . uniqid() . '.' . $file->extension();
-        EncryptionHelper::storeEncrypted($path, $content);
-
-        $roleRequest = RoleRequest::create([
-            'user_id' => $request->user()->id,
-            'role_demande' => $validated['role_demande'],
-            'document_justificatif' => $path,
-        ]);
-
-        return response()->json($roleRequest, 201);
     }
 
     public function deleteAccount(Request $request): JsonResponse
     {
         $user = $request->user();
-
         $user->tokens()->delete();
-
         $user->professionnel?->delete();
-        $user->verifications()->each(fn($v) => $v->delete());
-
-        Storage::deleteDirectory('coffre/' . $user->id);
-
+        Storage::deleteDirectory('documents/' . $user->id);
         $user->delete();
 
-        return response()->json(['message' => 'Compte et toutes les données associées supprimés.']);
+        return response()->json(['message' => 'Compte supprimé.']);
     }
 }

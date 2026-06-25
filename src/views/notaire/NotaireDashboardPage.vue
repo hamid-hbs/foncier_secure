@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import transactionApi from '@/api/transaction'
 import StatutBadge from '@/components/StatutBadge.vue'
-import { goBack } from '@/utils/navigation'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -23,115 +22,146 @@ onMounted(async () => {
     recentTransactions.value = (Array.isArray(allData) ? allData : []).slice(0, 5)
     const enCoursCount = Array.isArray(pendingData) ? pendingData.length : 0
     const allCount = (allRes.data?.meta?.total || allRes.data?.total || (Array.isArray(allData) ? allData.length : 0))
-    stats.value = {
-      total: allCount,
-      en_cours: enCoursCount,
-      cloturees: 0,
-    }
-  } catch { /* ignore */ }
+    stats.value = { total: allCount, en_cours: enCoursCount, cloturees: 0 }
+  } catch (e) { console.error('Erreur chargement dashboard:', e) }
   loading.value = false
 })
 </script>
 
 <template>
-  <div class="page-container">
-    <button @click="goBack(router)" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-      <i class="fas fa-arrow-left"></i> Retour
-    </button>
-    <div class="flex items-center justify-between mb-8">
+  <div class="page-wrap">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
       <div>
-        <h1 class="section-title">Espace notaire</h1>
-        <p class="section-subtitle">Bienvenue, {{ auth.user?.prenom || 'Notaire' }}</p>
+        <h1 class="page-title">Étude Notariale</h1>
+        <p class="page-subtitle">Bienvenue, Maître {{ auth.user?.nom || auth.user?.prenom || 'Notaire' }}</p>
       </div>
-      <div class="flex items-center gap-2 text-sm" style="color: var(--text-secondary);">
-        <i class="fas fa-clock"></i>
+      <div class="flex items-center gap-2 text-sm text-stone-500 bg-white border border-stone-200 px-4 py-2 rounded-xl shadow-xs">
+        <i class="fas fa-calendar text-brand"></i>
         {{ new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) }}
       </div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
-      <div class="stats-card">
-        <div class="flex items-start justify-between mb-3">
-          <div class="w-11 h-11 rounded-lg flex items-center justify-center" style="background: var(--green-tree); opacity: 0.15;">
-            <i class="fas fa-file-lines" style="color: var(--green-tree);"></i>
-          </div>
-          <i class="fas fa-chart-line" style="color: var(--success);"></i>
-        </div>
-        <div class="stat-value">{{ loading ? '...' : stats.total }}</div>
-        <div class="stat-label">Total transactions</div>
-      </div>
-      <div class="stats-card">
-        <div class="flex items-start justify-between mb-3">
-          <div class="w-11 h-11 rounded-lg flex items-center justify-center" style="background: var(--gold); opacity: 0.15;">
-            <i class="fas fa-clock" style="color: var(--gold);"></i>
-          </div>
-          <i class="fas fa-chart-line" style="color: var(--success);"></i>
-        </div>
-        <div class="stat-value">{{ loading ? '...' : stats.en_cours }}</div>
-        <div class="stat-label">En cours</div>
-      </div>
-      <div class="stats-card">
-        <div class="flex items-start justify-between mb-3">
-          <div class="w-11 h-11 rounded-lg flex items-center justify-center" style="background: var(--success); opacity: 0.15;">
-            <i class="fas fa-circle-check" style="color: var(--success);"></i>
-          </div>
-          <i class="fas fa-chart-line" style="color: var(--success);"></i>
-        </div>
-        <div class="stat-value">{{ loading ? '...' : stats.cloturees }}</div>
-        <div class="stat-label">Clôturées</div>
-      </div>
+    <!-- Loading -->
+    <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div v-for="i in 3" :key="i" class="skeleton h-28 rounded-2xl"></div>
     </div>
 
-    <div class="card mb-6">
-      <div class="flex-between mb-4">
-        <h3 class="section-title" style="font-size: 1rem;">Transactions récentes</h3>
-        <router-link to="/notaire/transactions" class="btn-outline btn-sm flex items-center gap-1.5">
-          <i class="fas fa-eye"></i> Voir tout
-        </router-link>
+    <template v-else>
+      <!-- Stats -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div class="card">
+          <div class="flex items-start justify-between mb-3">
+            <p class="stat-label">Total dossiers</p>
+            <div class="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center text-stone-500 shrink-0">
+              <i class="fas fa-folder-open text-sm"></i>
+            </div>
+          </div>
+          <p class="stat-value">{{ stats.total }}</p>
+        </div>
+        <div class="card">
+          <div class="flex items-start justify-between mb-3">
+            <p class="stat-label">En cours</p>
+            <div class="w-10 h-10 rounded-xl bg-warn/10 flex items-center justify-center text-warn shrink-0">
+              <i class="fas fa-hourglass-half text-sm"></i>
+            </div>
+          </div>
+          <p class="stat-value">{{ stats.en_cours }}</p>
+        </div>
+        <div class="card">
+          <div class="flex items-start justify-between mb-3">
+            <p class="stat-label">Clôturés</p>
+            <div class="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center text-success shrink-0">
+              <i class="fas fa-check-double text-sm"></i>
+            </div>
+          </div>
+          <p class="stat-value">{{ stats.cloturees }}</p>
+        </div>
       </div>
-      <div v-if="loading" class="flex-center py-8">
-        <div class="w-6 h-6 border-2 rounded-full animate-spin" style="border-color: var(--green-tree); border-top-color: transparent;"></div>
-      </div>
-      <div v-else-if="recentTransactions.length === 0" class="text-center py-8" style="color: var(--text-secondary);">
-        <i class="fas fa-file-lines mb-2" style="font-size: 1.5rem;"></i>
-        <p>Aucune transaction récente</p>
-      </div>
-      <div v-else class="table-wrap">
-        <table class="w-full">
-          <thead>
-            <tr>
-              <th class="table-header">Titre</th>
-              <th class="table-header">Vendeur</th>
-              <th class="table-header">Acheteur</th>
-              <th class="table-header">Statut</th>
-              <th class="table-header"></th>
-            </tr>
-          </thead>
-          <tbody class="divide-y" style="border-color: var(--border);">
-            <tr v-for="t in recentTransactions" :key="t.id" @click="router.push(`/notaire/transactions/${t.id}`)" class="cursor-pointer" style="transition: background 0.15s;" @mouseenter="$event.currentTarget.style.background = 'var(--bg-page)'" @mouseleave="$event.currentTarget.style.background = ''">
-              <td class="table-cell font-medium" style="color: var(--text-primary);">{{ t.titre || 'Sans titre' }}</td>
-              <td class="table-cell">{{ t.vendeur?.nom || t.vendeur || '-' }}</td>
-              <td class="table-cell">{{ t.acheteur?.nom || t.acheteur || '-' }}</td>
-              <td class="table-cell"><StatutBadge :statut="t.statut" /></td>
-              <td class="table-cell"><i class="fas fa-chevron-right" style="color: var(--text-secondary);"></i></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
 
-    <div class="card">
-      <h3 class="section-title mb-4" style="font-size: 1rem;">
-        <i class="fas fa-bolt"></i> Actions rapides
-      </h3>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <router-link to="/notaire/transactions" class="flex-center gap-2 p-4 rounded-lg font-medium text-sm" style="background: var(--bg-page); color: var(--green-tree); transition: opacity 0.15s;" @mouseenter="$event.currentTarget.style.opacity = '0.8'" @mouseleave="$event.currentTarget.style.opacity = '1'">
-          <i class="fas fa-arrows-left-right"></i> Voir les transactions
-        </router-link>
-        <router-link to="/notaire/dossiers" class="flex-center gap-2 p-4 rounded-lg font-medium text-sm" style="background: var(--bg-page); color: var(--text-primary); transition: opacity 0.15s;" @mouseenter="$event.currentTarget.style.opacity = '0.8'" @mouseleave="$event.currentTarget.style.opacity = '1'">
-          <i class="fas fa-folder"></i> Voir les dossiers
-        </router-link>
+      <!-- Content -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 card">
+          <div class="flex items-center justify-between mb-5">
+            <h3 class="font-display font-bold text-stone-900">Transactions récentes</h3>
+            <router-link to="/notaire/transactions" class="text-xs font-bold text-brand hover:text-brand-light transition-colors">
+              Tous les dossiers <i class="fas fa-arrow-right ml-1 text-[10px]"></i>
+            </router-link>
+          </div>
+
+          <div v-if="recentTransactions.length === 0" class="empty-state py-10">
+            <div class="empty-icon"><i class="fas fa-file-signature"></i></div>
+            <p class="empty-title">Aucune transaction</p>
+            <p class="empty-text">Votre étude n'a pas encore de dossier actif.</p>
+            <router-link to="/notaire/transactions/creer" class="btn btn-primary mt-4">
+              <i class="fas fa-plus"></i> Créer un dossier
+            </router-link>
+          </div>
+
+          <div v-else class="space-y-2">
+            <div
+              v-for="t in recentTransactions" :key="t.id"
+              @click="router.push(`/notaire/transactions/${t.id}`)"
+              class="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-stone-100 hover:border-brand-100 hover:bg-brand-50/20 transition-all cursor-pointer"
+            >
+              <div class="flex items-start gap-4 mb-3 sm:mb-0">
+                <div class="w-11 h-11 rounded-xl bg-stone-100 flex items-center justify-center text-stone-500 group-hover:bg-brand group-hover:text-white transition-colors shrink-0">
+                  <i class="fas fa-file-contract text-sm"></i>
+                </div>
+                <div>
+                  <h4 class="font-bold text-stone-900 text-sm group-hover:text-brand transition-colors">
+                    {{ t.titre || 'Transaction #' + t.id }}
+                  </h4>
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-400 mt-1">
+                    <span><i class="fas fa-user-tag mr-1"></i>{{ t.vendeur?.nom || t.vendeur || 'Vendeur' }}</span>
+                    <i class="fas fa-arrow-right text-[10px]"></i>
+                    <span><i class="fas fa-user mr-1"></i>{{ t.acheteur?.nom || t.acheteur || 'Acheteur' }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 self-end sm:self-auto">
+                <StatutBadge :statut="t.statut" />
+                <i class="fas fa-chevron-right text-xs text-stone-300 group-hover:text-brand transition-colors"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <div class="card bg-brand-dark text-white relative overflow-hidden">
+            <div class="absolute -right-4 -top-4 text-white/5 pointer-events-none">
+              <i class="fas fa-scale-balanced text-[100px]"></i>
+            </div>
+            <h3 class="font-display font-bold mb-4 relative z-10">Actions rapides</h3>
+            <div class="space-y-2 relative z-10">
+              <router-link to="/notaire/transactions/creer" class="flex items-center gap-3 p-3 rounded-xl bg-brand hover:bg-brand-light transition-colors">
+                <div class="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0"><i class="fas fa-plus text-sm"></i></div>
+                <span class="font-semibold text-sm">Ouvrir un dossier</span>
+              </router-link>
+              <router-link to="/notaire/demandes-achat" class="flex items-center gap-3 p-3 rounded-xl bg-white/8 hover:bg-white/15 transition-colors">
+                <div class="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0"><i class="fas fa-cart-shopping text-sm"></i></div>
+                <span class="font-semibold text-sm">Demandes d'achat</span>
+              </router-link>
+              <router-link to="/notaire/transactions" class="flex items-center gap-3 p-3 rounded-xl bg-white/8 hover:bg-white/15 transition-colors">
+                <div class="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0"><i class="fas fa-folder-open text-sm"></i></div>
+                <span class="font-semibold text-sm">Tous les dossiers</span>
+              </router-link>
+            </div>
+          </div>
+
+          <div class="card border border-warn/30 bg-warn/5">
+            <div class="flex items-start gap-3">
+              <div class="w-9 h-9 rounded-xl bg-warn/10 flex items-center justify-center text-warn shrink-0">
+                <i class="fas fa-bell text-sm"></i>
+              </div>
+              <div>
+                <p class="font-bold text-stone-900 text-sm mb-1">Rappel important</p>
+                <p class="text-xs text-stone-500 leading-relaxed">Vérifiez l'identité de chaque intervenant avant la signature de l'acte de vente.</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>

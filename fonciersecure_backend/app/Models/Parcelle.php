@@ -10,27 +10,27 @@ class Parcelle extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'proprietaire_id', 'code', 'titre', 'description',
+        'code_parcelle', 'titre_parcelle', 'superficie',
         'commune_id', 'arrondissement_id', 'quartier_id',
-        'superficie', 'latitude', 'longitude',
-        'prix_estimatif', 'statut',
+        'localisation_textuelle', 'latitude', 'longitude',
+        'precision_gps', 'statut', 'type_acquisition', 'valeur_estimee',
     ];
 
-    protected static function boot(): void
-    {
-        parent::boot();
+    protected $casts = [
+        'latitude' => 'decimal:8',
+        'longitude' => 'decimal:8',
+        'precision_gps' => 'decimal:8',
+        'valeur_estimee' => 'decimal:2',
+    ];
 
-        static::creating(function (Parcelle $parcelle) {
-            if (!$parcelle->code) {
-                $maxId = static::max('id') ?? 0;
-                $parcelle->code = 'FS-' . str_pad($maxId + 1, 5, '0', STR_PAD_LEFT);
-            }
-        });
+    public function proprietaireActuel()
+    {
+        return $this->hasOne(Propriete::class)->whereNull('date_fin');
     }
 
-    public function proprietaire()
+    public function proprietes()
     {
-        return $this->belongsTo(User::class, 'proprietaire_id');
+        return $this->hasMany(Propriete::class);
     }
 
     public function commune()
@@ -48,14 +48,9 @@ class Parcelle extends Model
         return $this->belongsTo(Quartier::class);
     }
 
-    public function documents()
+    public function demandesAchat()
     {
-        return $this->hasMany(ParcelleDocument::class);
-    }
-
-    public function verifications()
-    {
-        return $this->hasMany(Verification::class);
+        return $this->hasMany(DemandeAchat::class);
     }
 
     public function dossiersTransaction()
@@ -63,24 +58,18 @@ class Parcelle extends Model
         return $this->hasMany(DossierTransaction::class);
     }
 
-    public function demandesAchat()
+    public function missions()
     {
-        return $this->hasMany(DemandeAchat::class);
+        return $this->hasMany(Mission::class);
     }
-}
 
-class ParcelleDocument extends Model
-{
-    protected $table = 'parcelle_documents';
-
-    protected $fillable = [
-        'parcelle_id', 'type_document',
-        'nom_fichier', 'chemin_fichier',
-        'hash_sha256', 'taille', 'uploaded_at',
-    ];
-
-    public function parcelle()
+    public function documents()
     {
-        return $this->belongsTo(Parcelle::class);
+        return $this->morphMany(Document::class, 'documentable');
+    }
+
+    public function analyses()
+    {
+        return $this->morphMany(Analyse::class, 'analysable');
     }
 }

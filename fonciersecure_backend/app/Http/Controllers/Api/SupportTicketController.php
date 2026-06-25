@@ -11,29 +11,23 @@ class SupportTicketController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = SupportTicket::with(['user', 'assigne']);
+        $user = $request->user();
 
-        if ($request->user()->role !== 'admin') {
-            $query->where('user_id', $request->user()->id);
+        $query = SupportTicket::with('user');
+
+        if (!$user->isAdmin()) {
+            $query->where('user_id', $user->id);
         }
 
-        if ($request->filled('statut')) {
-            $query->where('statut', $request->statut);
-        }
-
-        if ($request->filled('priorite')) {
-            $query->where('priorite', $request->priorite);
-        }
-
-        return response()->json($query->latest()->paginate(15));
+        return response()->json($query->orderBy('created_at', 'desc')->paginate(20));
     }
 
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'sujet' => 'required|string|max:200',
-            'message' => 'required|string',
-            'priorite' => 'sometimes|in:basse,normale,haute,urgente',
+            'message' => 'required|string|max:5000',
+            'priorite' => 'nullable|in:basse, normale, haute, urgente',
         ]);
 
         $ticket = SupportTicket::create([
@@ -46,51 +40,35 @@ class SupportTicketController extends Controller
         return response()->json($ticket->load('user'), 201);
     }
 
-    public function show(Request $request, SupportTicket $supportTicket): JsonResponse
+    public function show(SupportTicket $supportTicket): JsonResponse
     {
-        if ($request->user()->role !== 'admin' && $supportTicket->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Accès refusé'], 403);
-        }
-
         return response()->json($supportTicket->load(['user', 'assigne']));
     }
 
     public function repondre(Request $request, SupportTicket $supportTicket): JsonResponse
     {
-        if ($request->user()->role !== 'admin') {
-            return response()->json(['message' => 'Accès refusé'], 403);
-        }
-
-        $validated = $request->validate([
-            'reponse' => 'required|string',
-            'statut' => 'sometimes|in:en_cours,resolu',
-        ]);
+        $validated = $request->validate(['reponse' => 'required|string|max:10000']);
 
         $supportTicket->update([
             'reponse' => $validated['reponse'],
-            'assigned_to' => $supportTicket->assigned_to ?? $request->user()->id,
-            'statut' => $validated['statut'] ?? 'resolu',
-            'closed_at' => ($validated['statut'] ?? 'resolu') === 'resolu' ? now() : $supportTicket->closed_at,
+            'statut' => 'en_cours',
+            'assigned_to' => $request->user()->id,
         ]);
 
-        return response()->json($supportTicket->load(['user', 'assigne']));
+        return response()->json($supportTicket);
     }
 
     public function updateStatut(Request $request, SupportTicket $supportTicket): JsonResponse
     {
-        if ($request->user()->role !== 'admin') {
-            return response()->json(['message' => 'Accès refusé'], 403);
+        $validated = $request->validate(['statut' => 'required|in:ouvert,en_cours,resolu,ferme']);
+
+        $data = ['statut' => $validated['statut']];
+
+        if ($validated['statut'] === 'ferme') {
+            $data['closed_at'] = now();
         }
 
-        $validated = $request->validate([
-            'statut' => 'required|in:ouvert,en_cours,resolu,ferme',
-        ]);
-
-        $supportTicket->update([
-            'statut' => $validated['statut'],
-            'closed_at' => in_array($validated['statut'], ['resolu', 'ferme']) ? now() : null,
-        ]);
-
+        $supportTicket->update($data);
         return response()->json($supportTicket);
     }
 }

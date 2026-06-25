@@ -12,16 +12,16 @@ class LocalisationController extends Controller
 {
     public function communes(): JsonResponse
     {
-        return response()->json(Commune::with('arrondissements.quartiers')->get());
+        return response()->json(Commune::orderBy('nom')->get());
     }
 
     public function arrondissements(Commune $commune): JsonResponse
     {
-        return response()->json($commune->arrondissements()->with('quartiers')->get());
+        return response()->json($commune->arrondissements()->orderBy('nom')->get());
     }
 
     public function quartiers(Arrondissement $arrondissement): JsonResponse
     {
-        return response()->json($arrondissement->quartiers);
+        return response()->json($arrondissement->quartiers()->orderBy('nom')->get());
     }
 }

@@ -6,7 +6,6 @@ const routes = [
     component: () => import('@/layouts/PublicLayout.vue'),
     children: [
       { path: '', name: 'Landing', component: () => import('@/views/public/LandingPage.vue') },
-      { path: 'accueil', name: 'Home', component: () => import('@/views/public/HomePage.vue') },
       { path: 'auth/login', name: 'Login', component: () => import('@/views/auth/LoginPage.vue'), meta: { guest: true } },
       { path: 'auth/register', name: 'Register', component: () => import('@/views/auth/RegisterPage.vue'), meta: { guest: true } },
       { path: 'auth/forgot-password', name: 'ForgotPassword', component: () => import('@/views/auth/ForgotPasswordPage.vue'), meta: { guest: true } },
@@ -26,6 +25,7 @@ const routes = [
     children: [
       { path: 'mon-profil', name: 'Profil', component: () => import('@/views/auth/ProfilePage.vue'), meta: { auth: true } },
       { path: 'notifications', name: 'Notifications', component: () => import('@/views/auth/NotificationsPage.vue'), meta: { auth: true } },
+      { path: 'messagerie', name: 'Messagerie', component: () => import('@/views/auth/MessageriePage.vue'), meta: { auth: true } },
 
       { path: 'tableau-de-bord', name: 'CitoyenDashboard', component: () => import('@/views/citoyen/DashboardPage.vue'), meta: { auth: true } },
 
@@ -52,9 +52,14 @@ const routes = [
       // Citoyen Rendez-vous
       { path: 'citoyen/rendez-vous', name: 'RendezVous', component: () => import('@/views/citoyen/RendezVousPage.vue'), meta: { auth: true, role: 'citoyen' } },
 
-      // Citoyen Coffre
-      { path: 'citoyen/coffre', name: 'Coffre', component: () => import('@/views/citoyen/CoffreDossiersPage.vue'), meta: { auth: true, role: 'citoyen' } },
-      { path: 'citoyen/coffre/dossiers/:id', name: 'CoffreDossierDetail', component: () => import('@/views/citoyen/CoffreDossierDetailPage.vue'), meta: { auth: true, role: 'citoyen' } },
+      // Citoyen Services Géomètre
+      { path: 'citoyen/services-geometre', name: 'ServicesGeometre', component: () => import('@/views/citoyen/ServicesGeometrePage.vue'), meta: { auth: true, role: 'citoyen' } },
+      { path: 'citoyen/services-geometre/creer', name: 'NouveauServiceGeometre', component: () => import('@/views/citoyen/ServiceGeometreFormPage.vue'), meta: { auth: true, role: 'citoyen' } },
+      { path: 'citoyen/services-geometre/:id', name: 'ServiceGeometreDetail', component: () => import('@/views/citoyen/ServiceGeometreDetailPage.vue'), meta: { auth: true, role: 'citoyen' } },
+
+      // Coffre-fort (tous sauf admin)
+      { path: 'citoyen/coffre', name: 'Coffre', component: () => import('@/views/citoyen/CoffreDossiersPage.vue'), meta: { auth: true, role: 'citoyen,notaire,geometre' } },
+      { path: 'citoyen/coffre/dossiers/:id', name: 'CoffreDossierDetail', component: () => import('@/views/citoyen/CoffreDossierDetailPage.vue'), meta: { auth: true, role: 'citoyen,notaire,geometre' } },
 
       // Citoyen Recherche
       { path: 'citoyen/recherche', name: 'Recherche', component: () => import('@/views/citoyen/RecherchePage.vue'), meta: { auth: true, role: 'citoyen' } },
@@ -69,6 +74,8 @@ const routes = [
       { path: 'geometre/missions', name: 'Missions', component: () => import('@/views/geometre/MissionsPage.vue'), meta: { auth: true, role: 'geometre' } },
       { path: 'geometre/verifications/:id', name: 'GeometreVerificationDetail', component: () => import('@/views/citoyen/VerificationDetailPage.vue'), meta: { auth: true, role: 'geometre' } },
       { path: 'geometre/verifications/:id/rapport', name: 'DepotRapport', component: () => import('@/views/geometre/DepotRapportPage.vue'), meta: { auth: true, role: 'geometre' } },
+      { path: 'geometre/services-geometre', name: 'GeometreServices', component: () => import('@/views/geometre/ServicesGeometreListPage.vue'), meta: { auth: true, role: 'geometre' } },
+      { path: 'geometre/services-geometre/:id', name: 'GeometreServiceDetail', component: () => import('@/views/geometre/ServiceGeometreDetailPage.vue'), meta: { auth: true, role: 'geometre' } },
 
       // Notaire
       { path: 'notaire/dashboard', name: 'NotaireDashboard', component: () => import('@/views/notaire/NotaireDashboardPage.vue'), meta: { auth: true, role: 'notaire' } },
@@ -81,6 +88,10 @@ const routes = [
       { path: 'notaire/transactions/:id/intervenants', name: 'NotaireInviter', component: () => import('@/views/notaire/NotaireInviterPage.vue'), meta: { auth: true, role: 'notaire' } },
       { path: 'notaire/transactions/:id/verifier-identite', name: 'NotaireVerifierIdentite', component: () => import('@/views/notaire/NotaireVerifierIdentitePage.vue'), meta: { auth: true, role: 'notaire' } },
       { path: 'notaire/transactions/:id/planifier-rendezvous', name: 'NotairePlanifierRendezVous', component: () => import('@/views/notaire/NotairePlanifierRendezVousPage.vue'), meta: { auth: true, role: 'notaire' } },
+      // Notaire Factures
+      { path: 'notaire/transactions/:id/factures', name: 'NotaireFacturesTransaction', component: () => import('@/views/notaire/FacturesTransactionPage.vue'), meta: { auth: true, role: 'notaire' } },
+      { path: 'notaire/transactions/:id/factures/creer', name: 'NotaireFactureCreer', component: () => import('@/views/notaire/FactureFormPage.vue'), meta: { auth: true, role: 'notaire' } },
+      { path: 'notaire/factures/:id', name: 'NotaireFactureDetail', component: () => import('@/views/notaire/FactureDetailPage.vue'), meta: { auth: true, role: 'notaire' } },
       // Admin Support Tickets
       { path: 'admin/support/tickets', name: 'AdminSupportTickets', component: () => import('@/views/admin/SupportTicketsPage.vue'), meta: { auth: true, role: 'admin' } },
       { path: 'admin/support/tickets/:id', name: 'AdminSupportTicketDetail', component: () => import('@/views/admin/SupportTicketDetailPage.vue'), meta: { auth: true, role: 'admin' } },
@@ -88,6 +99,7 @@ const routes = [
       // Admin
       { path: 'admin/dashboard', name: 'AdminDashboard', component: () => import('@/views/admin/DashboardPage.vue'), meta: { auth: true, role: 'admin' } },
       { path: 'admin/users', name: 'AdminUsers', component: () => import('@/views/admin/UsersPage.vue'), meta: { auth: true, role: 'admin' } },
+      { path: 'admin/users/:id', name: 'AdminUserDetail', component: () => import('@/views/admin/UserDetailPage.vue'), meta: { auth: true, role: 'admin' } },
       { path: 'admin/role-requests', name: 'AdminRoleRequests', component: () => import('@/views/admin/RoleRequestsPage.vue'), meta: { auth: true, role: 'admin' } },
       { path: 'admin/localisation', name: 'AdminLocalisation', component: () => import('@/views/admin/LocalisationPage.vue'), meta: { auth: true, role: 'admin' } },
       { path: 'admin/users/new', name: 'AdminUserCreate', component: () => import('@/views/admin/UserFormPage.vue'), meta: { auth: true, role: 'admin' } },
@@ -115,7 +127,7 @@ router.beforeEach(async (to, from, next) => {
 
   if (to.meta.role) {
     const allowed = to.meta.role.split(',')
-    if (!allowed.includes(auth.user?.role)) {
+    if (!allowed.includes(auth.userRole)) {
       return next({ name: 'Profil' })
     }
   }

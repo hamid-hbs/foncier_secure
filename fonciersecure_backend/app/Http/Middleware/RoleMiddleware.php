@@ -14,11 +14,13 @@ class RoleMiddleware
             return response()->json(['message' => 'Non authentifié'], 401);
         }
 
-        if (!in_array($request->user()->role, $roles)) {
+        $userRole = $request->user()->role?->nom;
+
+        if (!in_array($userRole, $roles)) {
             return response()->json([
                 'message' => 'Accès refusé. Rôle requis : ' . implode(', ', $roles),
                 'roles_requis' => $roles,
-                'votre_role' => $request->user()->role,
+                'votre_role' => $userRole,
             ], 403);
         }
 

@@ -23,11 +23,11 @@ const userLinks = computed(() => {
     { label: 'Tableau de bord', to: '/tableau-de-bord' },
     { label: 'Profil', to: '/mon-profil' },
   ]
-  if (auth.user.role === 'geometre') {
+  if (auth.userRole === 'geometre') {
     links.unshift({ label: 'Géomètre', to: '/geometre/dashboard' })
-  } else if (auth.user.role === 'notaire') {
+  } else if (auth.userRole === 'notaire') {
     links.unshift({ label: 'Notaire', to: '/notaire/dashboard' })
-  } else if (auth.user.role === 'admin') {
+  } else if (auth.userRole === 'admin') {
     links.unshift({ label: 'Admin', to: '/admin/dashboard' })
   }
   return links
@@ -37,7 +37,7 @@ function handleLogout() {
   if (!confirmLogout()) return
   mobileOpen.value = false
   auth.logout()
-  router.push('/accueil')
+  router.push('/')
 }
 </script>
 <template>

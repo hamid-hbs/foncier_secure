@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\AvisProfessionnel;
 use App\Models\Professionnel;
 use Illuminate\Database\Seeder;
 
@@ -10,74 +9,56 @@ class ProfessionnelSeeder extends Seeder
 {
     public function run(): void
     {
-        $geometre1 = Professionnel::create([
-            'user_id' => 2,
+        Professionnel::create([
+            'user_id' => 5,
             'type' => 'geometre',
-            'cabinet' => 'Cabinet Topo-Bénin SARL',
-            'zone_intervention' => 'Littoral, Atlantique, Ouémé',
-            'specialites' => ['Bornage', 'levé topographique', 'plan parcellaire', 'morcellement'],
-            'note_moyenne' => 3.5,
+            'numero_enregistrement' => 'GEO-2024-001',
+            'date_enregistrement' => '2024-03-15',
+            'specialisation' => 'Bornage, Plan topographique, Division parcellaire',
+            'commune_id' => 1,
+            'adresse_bureau' => 'Cotonou, Gbégamey',
+            'taux_horaire' => 25000,
+            'note_moyenne' => 4.2,
+            'is_verified' => true,
         ]);
 
-        $notaire1 = Professionnel::create([
-            'user_id' => 3,
+        Professionnel::create([
+            'user_id' => 6,
             'type' => 'notaire',
-            'cabinet' => 'Étude Me Martine Dossou',
-            'zone_intervention' => 'Cotonou, Littoral',
-            'specialites' => ['Droit foncier', 'successions', 'transactions immobilières', 'droit de la famille'],
+            'numero_enregistrement' => 'NOT-2023-012',
+            'date_enregistrement' => '2023-06-20',
+            'specialisation' => 'Vente immobilière, Succession, Donation',
+            'commune_id' => 1,
+            'adresse_bureau' => 'Cotonou, Fidjrossè',
+            'taux_horaire' => 50000,
             'note_moyenne' => 4.5,
+            'is_verified' => true,
         ]);
 
-        $notaire2 = Professionnel::create([
+        Professionnel::create([
+            'user_id' => 8,
+            'type' => 'geometre',
+            'numero_enregistrement' => 'GEO-2023-045',
+            'date_enregistrement' => '2023-01-10',
+            'specialisation' => 'Topographie, Cadastre, Aménagement foncier',
+            'commune_id' => 3,
+            'adresse_bureau' => 'Parakou, Zongo',
+            'taux_horaire' => 20000,
+            'note_moyenne' => 3.8,
+            'is_verified' => true,
+        ]);
+
+        Professionnel::create([
             'user_id' => 9,
             'type' => 'notaire',
-            'cabinet' => 'Étude Me Bénédicte Gbaguidi',
-            'zone_intervention' => 'Cotonou, Abomey-Calavi, Porto-Novo',
-            'specialites' => ['Foncier', 'immobilier', 'contrats'],
+            'numero_enregistrement' => 'NOT-2022-008',
+            'date_enregistrement' => '2022-11-05',
+            'specialisation' => 'Transaction immobilière, Constitution de société',
+            'commune_id' => 2,
+            'adresse_bureau' => 'Porto-Novo, Ouando',
+            'taux_horaire' => 45000,
             'note_moyenne' => 4.8,
+            'is_verified' => true,
         ]);
-
-        $geometre2 = Professionnel::create([
-            'user_id' => 10,
-            'type' => 'geometre',
-            'cabinet' => 'Géo-Plan Services',
-            'zone_intervention' => 'Abomey-Calavi, Allada, Ouidah',
-            'specialites' => ['Géomètre expert', 'topographie', 'SIG', 'bornage judiciaire'],
-            'note_moyenne' => 3.0,
-        ]);
-
-        $geometre3 = Professionnel::create([
-            'user_id' => 12,
-            'type' => 'geometre',
-            'cabinet' => 'Topo-Expert Bénin',
-            'zone_intervention' => 'Parakou, Borgou, Alibori',
-            'specialites' => ['Géomètre topographe', 'lotissement', 'bornage'],
-            'note_moyenne' => 3.2,
-        ]);
-
-        $notaire3 = Professionnel::create([
-            'user_id' => 13,
-            'type' => 'notaire',
-            'cabinet' => 'Étude Me Jules Ligan',
-            'zone_intervention' => 'Parakou, Borgou',
-            'specialites' => ['Droit foncier', 'notariat', 'conseil juridique'],
-            'note_moyenne' => 4.2,
-        ]);
-
-        AvisProfessionnel::create(['professionnel_id' => $geometre1->id, 'auteur_id' => 4, 'note' => 4, 'commentaire' => 'Bon travail sur le bornage']);
-        AvisProfessionnel::create(['professionnel_id' => $geometre1->id, 'auteur_id' => 5, 'note' => 3, 'commentaire' => 'Rapport rendu avec retard']);
-        AvisProfessionnel::create(['professionnel_id' => $geometre1->id, 'auteur_id' => 11, 'note' => 4, 'commentaire' => 'Plan topographique de qualité']);
-
-        AvisProfessionnel::create(['professionnel_id' => $notaire1->id, 'auteur_id' => 4, 'note' => 5, 'commentaire' => 'Me Dossou est la meilleure notaire de Cotonou']);
-        AvisProfessionnel::create(['professionnel_id' => $notaire1->id, 'auteur_id' => 8, 'note' => 4, 'commentaire' => 'Très compétente en droit foncier']);
-
-        AvisProfessionnel::create(['professionnel_id' => $notaire2->id, 'auteur_id' => 4, 'note' => 5, 'commentaire' => 'Disponible et à l\'écoute']);
-        AvisProfessionnel::create(['professionnel_id' => $notaire2->id, 'auteur_id' => 5, 'note' => 5, 'commentaire' => 'Je recommande vivement']);
-        AvisProfessionnel::create(['professionnel_id' => $notaire2->id, 'auteur_id' => 8, 'note' => 4, 'commentaire' => 'Très bon conseil juridique']);
-
-        AvisProfessionnel::create(['professionnel_id' => $geometre2->id, 'auteur_id' => 7, 'note' => 2, 'commentaire' => 'Travail approximatif sur le bornage']);
-        AvisProfessionnel::create(['professionnel_id' => $geometre2->id, 'auteur_id' => 11, 'note' => 4, 'commentaire' => 'Bon professionnel']);
-
-        AvisProfessionnel::create(['professionnel_id' => $notaire3->id, 'auteur_id' => 7, 'note' => 5, 'commentaire' => 'Excellent notaire à Parakou']);
     }
 }

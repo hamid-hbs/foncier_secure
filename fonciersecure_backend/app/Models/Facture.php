@@ -7,41 +7,32 @@ use Illuminate\Database\Eloquent\Model;
 class Facture extends Model
 {
     protected $fillable = [
-        'dossier_id',
-        'emetteur_id',
-        'reference',
-        'montant',
-        'description',
-        'statut',
-        'envoyee_le',
-        'payee_le',
+        'reference', 'facturable_type', 'facturable_id',
+        'prestataire_id', 'client_id', 'montant_total', 'montant_paye',
+        'description', 'statut', 'date_emission', 'date_echeance',
+        'date_paiement', 'moyen_paiement',
     ];
 
     protected $casts = [
-        'montant' => 'decimal:2',
-        'envoyee_le' => 'datetime',
-        'payee_le' => 'datetime',
+        'montant_total' => 'decimal:2',
+        'montant_paye' => 'decimal:2',
+        'date_emission' => 'date',
+        'date_echeance' => 'date',
+        'date_paiement' => 'datetime',
     ];
 
-    public function dossier()
+    public function facturable()
     {
-        return $this->belongsTo(DossierTransaction::class, 'dossier_id');
+        return $this->morphTo();
     }
 
-    public function emetteur()
+    public function prestataire()
     {
-        return $this->belongsTo(User::class, 'emetteur_id');
+        return $this->belongsTo(User::class, 'prestataire_id');
     }
 
-    protected static function boot(): void
+    public function client()
     {
-        parent::boot();
-
-        static::creating(function (Facture $facture) {
-            if (!$facture->reference) {
-                $maxId = static::max('id') ?? 0;
-                $facture->reference = 'FACT-' . str_pad($maxId + 1, 5, '0', STR_PAD_LEFT);
-            }
-        });
+        return $this->belongsTo(User::class, 'client_id');
     }
 }

@@ -11,12 +11,12 @@ class NotificationController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $notifications = Notification::where('notifiable_id', $request->user()->id)
-            ->where('notifiable_type', 'user')
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
-
-        return response()->json($notifications);
+        return response()->json(
+            Notification::where('notifiable_id', $request->user()->id)
+                ->where('notifiable_type', 'App\Models\User')
+                ->orderBy('created_at', 'desc')
+                ->paginate(20)
+        );
     }
 
     public function markAsRead(Request $request, Notification $notification): JsonResponse
@@ -26,14 +26,13 @@ class NotificationController extends Controller
         }
 
         $notification->update(['read_at' => now()]);
-
         return response()->json($notification);
     }
 
     public function unreadCount(Request $request): JsonResponse
     {
         $count = Notification::where('notifiable_id', $request->user()->id)
-            ->where('notifiable_type', 'user')
+            ->where('notifiable_type', 'App\Models\User')
             ->whereNull('read_at')
             ->count();
 

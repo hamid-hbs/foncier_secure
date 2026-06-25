@@ -6,217 +6,108 @@ import coffreApi from '@/api/coffre'
 const route = useRoute()
 const router = useRouter()
 
-const dossier = ref(null)
+const document = ref(null)
 const loading = ref(true)
-const error = ref('')
-const uploading = ref(false)
-const selectedFile = ref(null)
-const showShareModal = ref(false)
-const shareDocId = ref(null)
-const shareEmail = ref('')
-const shareExpiry = ref('')
-const integriteStatus = ref({})
 
-async function fetchDossier() {
-  loading.value = true
+function fileIcon(type) {
+  if (!type) return 'fa-file'
+  if (type.includes('pdf')) return 'fa-file-pdf text-red-500'
+  if (type.includes('image') || type.includes('jpg') || type.includes('png')) return 'fa-file-image text-sky-500'
+  if (type.includes('word') || type.includes('doc')) return 'fa-file-word text-blue-500'
+  return 'fa-file text-stone-400'
+}
+
+onMounted(async () => {
   try {
-    const res = await coffreApi.listDossiers()
-    const list = (res.data || res.data?.data || []).filter(Boolean)
-    dossier.value = list.find(d => d.id == route.params.id) || null
-    if (!dossier.value) throw new Error('not found')
-  } catch {
-    error.value = 'Impossible de charger le dossier'
-  } finally {
-    loading.value = false
-  }
-}
+    const res = await coffreApi.showDossier(route.params.id)
+    document.value = res.data || null
+  } catch (e) { console.error('Erreur chargement document:', e) }
+  loading.value = false
+})
 
-onMounted(fetchDossier)
-
-async function uploadDocument() {
-  if (!selectedFile.value) return
-  uploading.value = true
-  error.value = ''
+async function deleteDocument(id) {
+  if (!confirm('Supprimer ce document ?')) return
   try {
-    const formData = new FormData()
-    formData.append('fichier', selectedFile.value)
-    await coffreApi.uploadDocument(dossier.value.id, formData)
-    selectedFile.value = null
-    await fetchDossier()
-  } catch (e) {
-    error.value = e.response?.data?.message || "Erreur lors du téléversement"
-  } finally {
-    uploading.value = false
-  }
+    await coffreApi.deleteDocument(id)
+    router.push('/citoyen/coffre')
+  } catch (e) { console.error('Erreur suppression document:', e) }
 }
 
-async function downloadDocument(doc) {
-  try {
-    const res = await coffreApi.downloadDocument(doc.id)
-    const url = URL.createObjectURL(new Blob([res.data]))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = doc.nom_fichier || doc.nom || 'document'
-    a.click()
-    URL.revokeObjectURL(url)
-  } catch {
-    error.value = 'Erreur de téléchargement'
-  }
-}
-
-function openShare(doc) {
-  shareDocId.value = doc.id
-  shareEmail.value = ''
-  shareExpiry.value = ''
-  showShareModal.value = true
-}
-
-async function submitShare() {
-  if (!shareEmail.value) return
-  try {
-    const payload = { email: shareEmail.value }
-    if (shareExpiry.value) payload.expire_le = shareExpiry.value
-    await coffreApi.shareDocument(shareDocId.value, payload)
-    showShareModal.value = false
-  } catch (e) {
-    error.value = e.response?.data?.message || 'Erreur lors du partage'
-  }
-}
-
-async function verifyIntegrite(docId) {
-  try {
-    const res = await coffreApi.verifyIntegrite(docId)
-    integriteStatus.value[docId] = res.data?.integrite === true
-  } catch {
-    integriteStatus.value[docId] = false
-  }
-}
-
-function formatSize(bytes) {
-  if (!bytes) return '-'
-  const sizes = ['o', 'Ko', 'Mo', 'Go']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i]
+const BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || ''
+function getFileUrl(chemin) {
+  if (!chemin) return '#'
+  if (chemin.startsWith('http')) return chemin
+  return `${BASE_URL}/storage/${chemin}`
 }
 </script>
 
 <template>
-  <div class="page-container max-w-5xl">
-    <div v-if="loading" class="flex-center py-16">
-      <div class="w-8 h-8 border-2 rounded-full animate-spin" style="border-color: var(--border); border-top-color: var(--green-tree);"></div>
+  <div class="page-wrap max-w-2xl mx-auto">
+    <div v-if="loading" class="space-y-4">
+      <div class="skeleton h-24 rounded-2xl"></div>
+      <div class="skeleton h-48 rounded-2xl"></div>
     </div>
 
-    <div v-else-if="error && !dossier" class="card text-center py-12">
-      <i class="fas fa-exclamation-circle text-4xl mb-3" style="color: var(--danger);"></i>
-      <p style="color: var(--text-secondary);">{{ error }}</p>
-      <button @click="router.push({ name: 'Coffre' })" class="btn-outline mt-4 flex items-center gap-2">
-        <i class="fas fa-arrow-left"></i> Retour au coffre
-      </button>
+    <div v-else-if="!document" class="card">
+      <div class="empty-state">
+        <div class="empty-icon"><i class="fas fa-lock"></i></div>
+        <p class="empty-title">Document introuvable</p>
+        <button @click="router.push('/citoyen/coffre')" class="btn btn-primary mt-4">Retour au coffre-fort</button>
+      </div>
     </div>
 
-    <template v-else-if="dossier">
-      <button @click="router.push({ name: 'Coffre' })" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-        <i class="fas fa-arrow-left"></i> Retour au coffre
+    <template v-else>
+      <button @click="router.push('/citoyen/coffre')" class="flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors mb-6">
+        <i class="fas fa-arrow-left text-xs"></i> Coffre-fort
       </button>
 
-      <div v-if="error" class="p-3.5 rounded-lg text-sm mb-4" style="background: #FEE2E2; color: var(--danger); border: 1px solid #FECACA;">
-        {{ error }}
-      </div>
-
-      <div class="flex items-center gap-3 mb-6">
-        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: #F3E8FF;">
-          <i class="fas fa-folder" style="color: #6B21A8;"></i>
-        </div>
-        <div>
-          <h1 class="section-title">{{ dossier.titre }}</h1>
-          <p v-if="dossier.description" class="section-subtitle">{{ dossier.description }}</p>
-          <p class="text-xs mt-1" style="color: var(--text-secondary);">
-            Créé le {{ dossier.created_at ? new Date(dossier.created_at).toLocaleDateString('fr-FR') : '-' }}
-          </p>
-        </div>
-      </div>
-
-      <div class="card mb-6">
-        <h3 class="font-semibold mb-4 flex items-center gap-2" style="color: var(--text-primary);">
-          <i class="fas fa-upload" style="color: var(--green-tree);"></i> Ajouter un document
-        </h3>
-        <div class="flex items-center gap-3">
-          <input type="file" @change="selectedFile = $event.target.files[0] || null" class="form-input flex-1" />
-          <button @click="uploadDocument" class="btn-green btn-sm" :disabled="!selectedFile || uploading">
-            <i class="fas fa-cloud-upload-alt"></i> {{ uploading ? 'Téléversement...' : 'Téléverser' }}
-          </button>
-        </div>
-        <p v-if="selectedFile" class="text-xs mt-2" style="color: var(--text-secondary);">
-          Fichier sélectionné : {{ selectedFile.name }}
-        </p>
-      </div>
-
-      <div class="card">
-        <div class="flex-between mb-4">
-          <h3 class="font-semibold" style="color: var(--text-primary);">
-            <i class="fas fa-file-alt" style="color: var(--green-tree);"></i>
-            Documents ({{ dossier.documents?.length || 0 }})
-          </h3>
-        </div>
-
-        <div v-if="!dossier.documents?.length" class="text-center py-10">
-          <i class="fas fa-file-upload text-3xl mb-3" style="color: var(--border);"></i>
-          <p style="color: var(--text-secondary);">Aucun document dans ce dossier.</p>
-        </div>
-
-        <div v-else class="space-y-2">
-          <div v-for="doc in dossier.documents" :key="doc.id" class="flex items-center gap-3 p-3 rounded-lg" style="background: var(--bg-page);">
-            <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background: #F3E8FF; color: #6B21A8;">
-              <i class="fas fa-file-alt"></i>
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="font-medium text-sm truncate" style="color: var(--text-primary);">{{ doc.nom_fichier || doc.nom || 'Document' }}</p>
-              <p class="text-xs" style="color: var(--text-secondary);">
-                <span v-if="doc.type">{{ doc.type }} — </span>
-                {{ doc.created_at ? new Date(doc.created_at).toLocaleDateString('fr-FR') : '-' }}
-                <span v-if="doc.taille"> — {{ formatSize(doc.taille) }}</span>
-              </p>
-            </div>
-            <div class="flex items-center gap-1 shrink-0">
-              <button @click="verifyIntegrite(doc.id)" class="btn-outline btn-sm" title="Vérifier l'intégrité">
-                <i v-if="integriteStatus[doc.id] === undefined" class="fas fa-shield-alt"></i>
-                <i v-else-if="integriteStatus[doc.id]" class="fas fa-check-circle" style="color: var(--green-tree);"></i>
-                <i v-else class="fas fa-times-circle" style="color: var(--danger);"></i>
-              </button>
-              <button @click="openShare(doc)" class="btn-outline btn-sm" title="Partager">
-                <i class="fas fa-share-alt"></i>
-              </button>
-              <button @click="downloadDocument(doc)" class="btn-outline btn-sm" title="Télécharger">
-                <i class="fas fa-download"></i>
-              </button>
+      <div class="card mb-5">
+        <div class="flex items-start gap-4">
+          <div class="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center text-brand shrink-0 text-xl">
+            <i :class="['fas', fileIcon(document.type_document || document.mime_type)]"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h1 class="font-display font-bold text-xl text-stone-900">{{ document.nom_fichier || document.nom || 'Document' }}</h1>
+            <div class="flex flex-wrap gap-x-5 gap-y-1 mt-2 text-sm text-stone-400">
+              <span v-if="document.type_document"><i class="fas fa-tag mr-1.5 text-stone-300"></i>{{ document.type_document }}</span>
+              <span v-if="document.taille"><i class="fas fa-weight-hanging mr-1.5 text-stone-300"></i>{{ (document.taille / 1024).toFixed(1) }} Ko</span>
+              <span><i class="fas fa-calendar mr-1.5 text-stone-300"></i>{{ document.created_at ? new Date(document.created_at).toLocaleDateString('fr-FR') : '—' }}</span>
             </div>
           </div>
-        </div>
-      </div>
-    </template>
-
-    <Teleport to="body">
-      <div v-if="showShareModal" class="fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.4);">
-        <div class="card max-w-md w-full mx-4">
-          <h3 class="font-semibold mb-4" style="color: var(--text-primary);">Partager le document</h3>
-          <div class="space-y-4">
-            <div class="form-group">
-              <label class="form-label">Adresse email</label>
-              <input v-model="shareEmail" type="email" class="form-input" placeholder="Email du destinataire" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Date d'expiration (optionnelle)</label>
-              <input v-model="shareExpiry" type="date" class="form-input" />
-            </div>
-          </div>
-          <div class="flex items-center justify-end gap-3 mt-6">
-            <button @click="showShareModal = false" class="btn-outline btn-sm">Annuler</button>
-            <button @click="submitShare" class="btn-green btn-sm flex items-center gap-1" :disabled="!shareEmail">
-              <i class="fas fa-share-alt"></i> Partager
+          <div class="flex items-center gap-2 shrink-0">
+            <a :href="getFileUrl(document.chemin_fichier || document.fichier)" target="_blank" class="btn btn-primary btn-sm">
+              <i class="fas fa-download"></i> Télécharger
+            </a>
+            <button @click="deleteDocument(document.id)" class="btn btn-ghost btn-icon text-stone-400 hover:text-danger hover:bg-red-50">
+              <i class="fas fa-trash"></i>
             </button>
           </div>
         </div>
       </div>
-    </Teleport>
+
+      <div class="card">
+        <h3 class="font-display font-bold text-stone-900 mb-4 flex items-center gap-2">
+          <i class="fas fa-info-circle text-brand text-sm"></i> Informations
+        </h3>
+        <div class="space-y-3">
+          <div class="flex items-center gap-3 py-2.5 border-b border-stone-50">
+            <span class="text-sm font-semibold text-stone-500 min-w-[120px]">Type</span>
+            <span class="text-sm text-stone-900">{{ document.type_document || 'Document' }}</span>
+          </div>
+          <div class="flex items-center gap-3 py-2.5 border-b border-stone-50">
+            <span class="text-sm font-semibold text-stone-500 min-w-[120px]">Hash SHA-256</span>
+            <span class="text-xs font-mono text-stone-600 break-all">{{ document.hash_sha256 || '—' }}</span>
+          </div>
+          <div v-if="document.uploader" class="flex items-center gap-3 py-2.5 border-b border-stone-50">
+            <span class="text-sm font-semibold text-stone-500 min-w-[120px]">Ajouté par</span>
+            <span class="text-sm text-stone-900">{{ document.uploader.prenom }} {{ document.uploader.nom }}</span>
+          </div>
+          <div class="flex items-center gap-3 py-2.5">
+            <span class="text-sm font-semibold text-stone-500 min-w-[120px]">Date d'ajout</span>
+            <span class="text-sm text-stone-900">{{ document.created_at ? new Date(document.created_at).toLocaleString('fr-FR') : '—' }}</span>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 </template>

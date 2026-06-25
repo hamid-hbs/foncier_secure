@@ -35,8 +35,8 @@
                 <td><strong>Date:</strong><br>{{ $facture->created_at->format('d/m/Y') }}</td>
             </tr>
             <tr>
-                <td><strong>Dossier:</strong><br>{{ $facture->dossier->titre }}</td>
-                <td><strong>Parcelle:</strong><br>{{ $facture->dossier->parcelle->code ?? 'N/A' }}</td>
+                <td><strong>Référence liée:</strong><br>{{ $facture->facturable?->titre ?? 'N/A' }}</td>
+                <td><strong>Type:</strong><br>{{ class_basename($facture->facturable_type) }}</td>
             </tr>
         </table>
     </div>

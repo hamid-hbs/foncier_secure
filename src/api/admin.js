@@ -3,9 +3,11 @@ import api from './axios'
 export default {
   dashboard: () => api.get('/admin/dashboard'),
   getUsers: (params) => api.get('/admin/users', { params }),
+  getPendingUsers: () => api.get('/admin/users/pending'),
+  approveUser: (id) => api.patch(`/admin/users/${id}/approve`),
   toggleUserStatus: (id) => api.patch(`/admin/users/${id}/toggle-status`),
-  getRoleRequests: () => api.get('/admin/role-requests'),
-  approveRoleRequest: (id, data) => api.patch(`/admin/role-requests/${id}`, data),
+  updateUserRole: (id, data) => api.patch(`/admin/users/${id}/role`, data),
+  createProfessionnel: (data) => api.post('/admin/professionnels', data),
   createCommune: (data) => api.post('/admin/localisation/communes', data),
   updateCommune: (id, data) => api.put(`/admin/localisation/communes/${id}`, data),
   deleteCommune: (id) => api.delete(`/admin/localisation/communes/${id}`),

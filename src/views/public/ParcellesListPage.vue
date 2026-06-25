@@ -15,29 +15,13 @@ const currentPage = ref(1)
 const lastPage = ref(1)
 const total = ref(0)
 
-const featuredIndex = ref(0)
-const featuredParcelles = computed(() => parcelles.value.slice(0, 5))
-
 const gradients = [
-  ['#2D6A4F', '#40916C', '#52B788'],
-  ['#1B4332', '#2D6A4F', '#40916C'],
-  ['#D4A373', '#E6B87D', '#F0C99A'],
-  ['#457B9D', '#1D3557', '#A8DADC'],
-  ['#E76F51', '#F4A261', '#E9C46A'],
+  ['#2d6a4f','#40916c','#6bb99e'],
+  ['#1b4332','#2d6a4f','#40916c'],
+  ['#e8a020','#c97c10','#a55c0e'],
+  ['#0284c7','#0ea5e9','#38bdf8'],
+  ['#059669','#10b981','#34d399'],
 ]
-const avatarColors = ['#2D6A4F', '#457B9D', '#D4A373', '#E76F51', '#1B4332', '#6B7280']
-const statutLabels = {
-  libre: 'Libre',
-  en_demande: 'En demande',
-  en_transaction: 'En transaction',
-  vendue: 'Vendue',
-}
-const statutColors = {
-  libre: 'badge-success',
-  en_demande: 'badge-warning',
-  en_transaction: 'badge-info',
-  vendue: 'badge-danger',
-}
 
 const BASE_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || ''
 
@@ -51,25 +35,29 @@ function getPhotoUrl(p) {
   return `${BASE_URL}/storage/${chemin}`
 }
 
-function featuredGradient(i) {
-  const g = gradients[i % gradients.length]
-  return `linear-gradient(135deg, ${g[0]} 0%, ${g[1]} 50%, ${g[2]} 100%)`
-}
 function cardGradient(p) {
   const g = gradients[(p.id || 0) % gradients.length]
-  return `linear-gradient(135deg, ${g[0]} 0%, ${g[1]} 50%, ${g[2]} 100%)`
-}
-function avatarColor(p) {
-  return avatarColors[(p.id || 0) % avatarColors.length]
+  return `linear-gradient(135deg, ${g[0]} 0%, ${g[1]} 60%, ${g[2]} 100%)`
 }
 
-const statuts = ['libre', 'en_demande', 'en_transaction', 'vendue']
+function statutBadgeClass(s) {
+  const map = { libre: 'badge-success', en_demande: 'badge-warning', en_transaction: 'badge-info', vendue: 'badge-neutral', conteste: 'badge-danger' }
+  return map[s] || 'badge-neutral'
+}
+
+const statuts = [
+  { value: '', label: 'Tous les statuts' },
+  { value: 'libre', label: 'Libre' },
+  { value: 'en_demande', label: 'En demande' },
+  { value: 'en_transaction', label: 'En transaction' },
+  { value: 'vendue', label: 'Vendue' },
+]
 
 async function fetchCommunes() {
   try {
     const res = await localisationApi.getCommunes()
     communes.value = (res.data || []).filter(Boolean)
-  } catch {}
+  } catch (e) { console.error('Erreur chargement communes:', e) }
 }
 
 async function fetchParcelles() {
@@ -80,209 +68,136 @@ async function fetchParcelles() {
     if (statutFilter.value) params.statut = statutFilter.value
     if (communeFilter.value) params.commune_id = communeFilter.value
     const res = await parcelleApi.list(params)
-    const data = res.data
-    parcelles.value = (data.data || []).filter(Boolean)
-    currentPage.value = data.current_page || 1
-    lastPage.value = data.last_page || 1
-    total.value = data.total || 0
-  } catch {}
+    parcelles.value = (res.data.data || []).filter(Boolean)
+    lastPage.value = res.data?.meta?.last_page || 1
+    total.value = res.data?.meta?.total || parcelles.value.length
+  } catch (e) { console.error('Erreur chargement parcelles:', e) }
   loading.value = false
 }
 
-function changePage(page) {
-  if (page < 1 || page > lastPage.value) return
-  currentPage.value = page
-  fetchParcelles()
-}
+watch([search, statutFilter, communeFilter], () => { currentPage.value = 1; fetchParcelles() })
 
-watch([search, statutFilter, communeFilter], () => {
-  currentPage.value = 1
-  fetchParcelles()
-})
-
-let autoSlide = null
 onMounted(() => {
   fetchCommunes()
   fetchParcelles()
-  autoSlide = setInterval(() => {
-    if (featuredParcelles.value.length > 1) {
-      featuredIndex.value = (featuredIndex.value + 1) % featuredParcelles.value.length
-    }
-  }, 5000)
-})
-onUnmounted(() => {
-  if (autoSlide) clearInterval(autoSlide)
 })
 </script>
 
 <template>
-  <div class="page-container">
-    <div class="mb-8">
-      <h1 class="section-title">Catalogue des parcelles</h1>
-      <p class="section-subtitle">Consultez les parcelles disponibles et leurs informations</p>
-    </div>
-
-    <!-- Featured parcelles hero banner -->
-    <div v-if="parcelles.length > 0" class="card p-0 overflow-hidden mb-6">
-      <div class="relative overflow-hidden" style="height: 280px;">
-        <div class="absolute inset-0 flex transition-transform duration-500" :style="{ transform: `translateX(-${featuredIndex * 100}%)` }">
-          <div v-for="(p, i) in featuredParcelles" :key="p.id" class="min-w-full h-full relative" @click="router.push('/parcelles/' + p.id)" style="cursor: pointer;">
-            <!-- Image réelle ou fond dégradé pour le hero -->
-            <div class="w-full h-full relative overflow-hidden">
-              <img
-                v-if="getPhotoUrl(p)"
-                :src="getPhotoUrl(p)"
-                :alt="p.titre || 'Photo parcelle'"
-                class="w-full h-full object-cover"
-              />
-              <div v-else class="w-full h-full" :style="{ background: featuredGradient(i) }">
-                <div class="w-full h-full flex items-center justify-center">
-                  <i class="fas fa-image" style="font-size: 4rem; color: rgba(255,255,255,0.25);"></i>
-                </div>
-              </div>
-            </div>
-            <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.1) 60%, transparent 100%);">
-              <div class="absolute bottom-0 left-0 right-0 p-6">
-                <div class="flex items-center gap-2 mb-2">
-                  <span :class="['badge', statutColors[p.statut] || 'badge-info']">{{ statutLabels[p.statut] || p.statut }}</span>
-                  <span class="badge badge-info" style="background: rgba(255,255,255,0.2); color: white;">{{ p.superficie || '—' }} m²</span>
-                </div>
-                <h3 class="text-xl font-bold text-white mb-1">{{ p.titre || 'Sans titre' }}</h3>
-                <p class="text-sm" style="color: rgba(255,255,255,0.8);">
-                  <i class="fas fa-map-pin mr-1"></i>
-                  {{ p.commune?.nom || '—' }}{{ p.arrondissement?.nom ? ' — ' + p.arrondissement.nom : '' }}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- Navigation dots -->
-        <div v-if="featuredParcelles.length > 1" class="absolute bottom-3 right-6 flex items-center gap-2 z-10">
-          <button v-for="(_, i) in featuredParcelles" :key="i" @click="featuredIndex = i"
-            class="w-2.5 h-2.5 rounded-full transition-all duration-300"
-            :style="i === featuredIndex ? { background: 'white', width: '20px' } : { background: 'rgba(255,255,255,0.5)' }">
-          </button>
-        </div>
-        <!-- Arrow nav -->
-        <button v-if="featuredParcelles.length > 1" @click="featuredIndex = (featuredIndex - 1 + featuredParcelles.length) % featuredParcelles.length"
-          class="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center text-white z-10 transition-all"
-          style="background: rgba(0,0,0,0.3);" @mouseover="$event.target.style.background = 'rgba(0,0,0,0.5)'" @mouseout="$event.target.style.background = 'rgba(0,0,0,0.3)'">
-          <i class="fas fa-chevron-left"></i>
-        </button>
-        <button v-if="featuredParcelles.length > 1" @click="featuredIndex = (featuredIndex + 1) % featuredParcelles.length"
-          class="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full flex items-center justify-center text-white z-10 transition-all"
-          style="background: rgba(0,0,0,0.3);" @mouseover="$event.target.style.background = 'rgba(0,0,0,0.5)'" @mouseout="$event.target.style.background = 'rgba(0,0,0,0.3)'">
-          <i class="fas fa-chevron-right"></i>
-        </button>
+  <div>
+    <!-- Hero header -->
+    <section class="relative py-16 overflow-hidden" style="background: var(--brand-dark);">
+      <div class="absolute inset-0 opacity-10 pointer-events-none">
+        <div class="absolute -top-16 left-1/3 w-96 h-96 rounded-full" style="background: radial-gradient(circle, #40916c, transparent);"></div>
+        <div class="absolute bottom-0 right-1/4 w-64 h-64 rounded-full" style="background: radial-gradient(circle, var(--gold), transparent);"></div>
       </div>
-    </div>
+      <div class="max-w-7xl mx-auto px-5 sm:px-8 relative z-10">
+        <div class="text-center mb-10">
+          <span class="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest text-gold bg-gold/15 mb-4">Annonces foncières</span>
+          <h1 class="font-display font-extrabold text-4xl sm:text-5xl text-white mb-3">Parcelles disponibles</h1>
+          <p class="text-white/60 text-lg">{{ total.toLocaleString('fr-FR') }} parcelles enregistrées sur la plateforme</p>
+        </div>
 
-    <!-- Filtres -->
-    <div class="card p-4 mb-6">
-      <div class="flex flex-wrap gap-4">
-        <div class="relative flex-1 min-w-[200px]">
-          <i class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2" style="color: var(--text-secondary);"></i>
-          <input v-model="search" class="form-input pl-10" placeholder="Rechercher par titre..." />
-        </div>
-        <div class="relative w-48">
-          <i class="fas fa-filter absolute left-3.5 top-1/2 -translate-y-1/2" style="color: var(--text-secondary);"></i>
-          <select v-model="statutFilter" class="form-select pl-10">
-            <option value="">Tous les statuts</option>
-            <option v-for="s in statuts" :key="s" :value="s">{{ statutLabels[s] }}</option>
+        <!-- Filters -->
+        <div class="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="relative sm:col-span-1">
+            <i class="fas fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-sm pointer-events-none z-10"></i>
+            <input v-model="search" type="text" class="form-input pl-10" placeholder="Rechercher…" />
+          </div>
+          <select v-model="statutFilter" class="form-select">
+            <option v-for="s in statuts" :key="s.value" :value="s.value">{{ s.label }}</option>
           </select>
-        </div>
-        <div class="relative w-56">
-          <i class="fas fa-map-pin absolute left-3.5 top-1/2 -translate-y-1/2" style="color: var(--text-secondary);"></i>
-          <select v-model="communeFilter" class="form-select pl-10">
-            <option value="">Toutes les communes</option>
+          <select v-model="communeFilter" class="form-select">
+            <option value="">Toutes communes</option>
             <option v-for="c in communes" :key="c.id" :value="c.id">{{ c.nom }}</option>
           </select>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div v-if="loading && parcelles.length === 0" class="text-center py-16">
-      <div class="w-8 h-8 border-2 rounded-full animate-spin mx-auto" style="border-color: var(--green-tree); border-top-color: transparent;"></div>
-    </div>
+    <!-- Results -->
+    <section class="py-12 bg-stone-50">
+      <div class="max-w-7xl mx-auto px-5 sm:px-8">
 
-    <div v-else-if="parcelles.length === 0" class="card text-center py-12">
-      <i class="fas fa-map-pin mb-3" style="color: #D1D5DB; font-size: 3rem;"></i>
-      <p style="color: var(--text-secondary);">Aucune parcelle trouvée.</p>
-    </div>
+        <!-- Loading -->
+        <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div v-for="i in 8" :key="i" class="skeleton h-72 rounded-2xl"></div>
+        </div>
 
-    <!-- Liste des parcelles en style Facebook -->
-    <div v-else class="space-y-5">
-      <div v-for="p in parcelles" :key="p.id" class="card p-0 overflow-hidden" style="cursor: pointer; border-radius: 14px;" @click="router.push('/parcelles/' + p.id)">
-        <!-- Vignette image ou placeholder -->
-        <div class="relative w-full overflow-hidden" style="height: 200px;">
-          <img
-            v-if="getPhotoUrl(p)"
-            :src="getPhotoUrl(p)"
-            :alt="p.titre || 'Photo parcelle'"
-            class="w-full h-full object-cover"
-          />
-          <div
-            v-else
-            class="w-full h-full flex flex-col items-center justify-center gap-2"
-            :style="{ background: cardGradient(p) }"
-          >
-            <i class="fas fa-image" style="font-size: 3rem; color: rgba(255,255,255,0.35);"></i>
-            <span class="text-xs font-medium" style="color: rgba(255,255,255,0.6);">Aucune photo</span>
-          </div>
-          <!-- Overlay dégradé bas -->
-          <div class="absolute inset-x-0 bottom-0 h-16" style="background: linear-gradient(to top, rgba(0,0,0,0.45), transparent);"></div>
-          <!-- Badge statut -->
-          <div class="absolute bottom-3 left-4">
-            <span :class="['badge', statutColors[p.statut] || 'badge-info']" style="background: rgba(255,255,255,0.9); color: var(--text-primary);">{{ statutLabels[p.statut] || p.statut }}</span>
+        <!-- Empty -->
+        <div v-else-if="parcelles.length === 0" class="card max-w-lg mx-auto">
+          <div class="empty-state">
+            <div class="empty-icon"><i class="fas fa-map"></i></div>
+            <p class="empty-title">Aucune parcelle trouvée</p>
+            <p class="empty-text">Modifiez vos critères de recherche pour voir plus de résultats.</p>
           </div>
         </div>
-        <div class="p-5">
-          <div class="flex items-center gap-3 mb-3">
-            <div class="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0" :style="{ background: avatarColor(p) }">
-              {{ (p.proprietaire?.prenom?.[0] || '') + (p.proprietaire?.nom?.[0] || '') || '?' }}
+
+        <!-- Grid -->
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div
+            v-for="p in parcelles" :key="p.id"
+            @click="router.push(`/parcelles/${p.id}`)"
+            class="bg-white rounded-2xl border border-stone-100 overflow-hidden cursor-pointer hover:border-brand-100 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group flex flex-col"
+          >
+            <!-- Image/gradient -->
+            <div class="relative w-full h-44 overflow-hidden shrink-0">
+              <img
+                v-if="getPhotoUrl(p)"
+                :src="getPhotoUrl(p)"
+                :alt="p.titre"
+                class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+              <div v-else class="w-full h-full flex flex-col items-center justify-center gap-2 transition-transform duration-500 group-hover:scale-105"
+                :style="{ background: cardGradient(p) }">
+                <i class="fas fa-map-marked-alt text-4xl text-white/40"></i>
+                <span class="text-[10px] font-bold uppercase tracking-widest text-white/50">Sans aperçu</span>
+              </div>
+              <div class="absolute inset-0 bg-gradient-to-t from-stone-900/50 via-transparent to-transparent"></div>
+              <span class="badge absolute top-3 right-3 backdrop-blur-sm" :class="statutBadgeClass(p.statut)">
+                {{ (p.statut || '').replace('_', ' ') }}
+              </span>
+              <span class="absolute bottom-3 left-3 font-mono text-xs font-semibold text-white bg-black/40 backdrop-blur px-2 py-1 rounded-lg">
+                {{ p.code || '#' + p.id }}
+              </span>
             </div>
-            <div class="flex-1 min-w-0">
-              <p class="font-semibold text-sm truncate" style="color: var(--text-primary);">{{ p.proprietaire?.prenom || '' }} {{ p.proprietaire?.nom || 'Propriétaire' }}</p>
-              <p class="text-xs" style="color: var(--text-secondary);">{{ p.created_at ? new Date(p.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—' }}</p>
+
+            <!-- Info -->
+            <div class="p-4 flex-1 flex flex-col">
+              <h3 class="font-display font-bold text-stone-900 mb-2 group-hover:text-brand transition-colors line-clamp-1">
+                {{ p.titre || 'Parcelle non nommée' }}
+              </h3>
+              <div class="space-y-1.5 flex-1 mb-3">
+                <div class="flex items-start gap-2 text-xs text-stone-400">
+                  <i class="fas fa-location-dot mt-0.5 w-3.5 shrink-0 text-center text-stone-300"></i>
+                  <span class="truncate-2">{{ [p.commune?.nom, p.arrondissement?.nom, p.quartier?.nom].filter(Boolean).join(' · ') || 'Localisation inconnue' }}</span>
+                </div>
+                <div v-if="p.superficie" class="flex items-center gap-2 text-xs">
+                  <i class="fas fa-ruler-combined w-3.5 text-center text-stone-300"></i>
+                  <span class="font-semibold text-stone-700">{{ p.superficie }} m²</span>
+                </div>
+                <div v-if="p.prix_estimatif" class="flex items-center gap-2 text-xs">
+                  <i class="fas fa-tag w-3.5 text-center text-gold"></i>
+                  <span class="font-bold text-stone-900">{{ Number(p.prix_estimatif).toLocaleString('fr-FR') }} FCFA</span>
+                </div>
+              </div>
+              <div class="pt-3 border-t border-stone-100 flex items-center justify-between text-xs">
+                <span class="text-stone-400"><i class="fas fa-user mr-1"></i>{{ p.proprietaire?.nom || p.proprietaire?.prenom || 'Propriétaire' }}</span>
+                <span class="text-brand font-bold group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                  Détails <i class="fas fa-arrow-right text-[10px]"></i>
+                </span>
+              </div>
             </div>
-            <i class="fas fa-ellipsis-h" style="color: var(--text-secondary);"></i>
           </div>
-          <h3 class="font-bold text-base mb-2" style="color: var(--text-primary);">{{ p.titre || 'Sans titre' }}</h3>
-          <p class="text-sm mb-3" style="color: var(--text-secondary);">
-            <i class="fas fa-map-marker-alt mr-1" style="color: var(--green-tree);"></i>
-            {{ p.commune?.nom || '—' }}<template v-if="p.arrondissement?.nom">, {{ p.arrondissement.nom }}</template>
-          </p>
-          <div class="flex items-center gap-4 text-sm" style="color: var(--text-secondary);">
-            <span><i class="fas fa-ruler-combined mr-1" style="color: var(--green-tree);"></i>{{ p.superficie || '—' }} m²</span>
-            <span v-if="p.prix_estimatif"><i class="fas fa-tag mr-1" style="color: var(--gold);"></i>{{ Number(p.prix_estimatif).toLocaleString('fr-FR') }} FCFA</span>
-          </div>
-          <div class="flex items-center gap-2 mt-4 pt-3" style="border-top: 1px solid var(--border);">
-            <button @click.stop class="flex items-center gap-1.5 text-sm font-medium" style="color: var(--text-secondary);">
-              <i class="fas fa-heart"></i> <span>0</span>
-            </button>
-            <button @click.stop class="flex items-center gap-1.5 text-sm font-medium" style="color: var(--text-secondary);">
-              <i class="fas fa-comment"></i> <span>0</span>
-            </button>
-            <button @click.stop class="flex items-center gap-1.5 text-sm font-medium ml-auto" style="color: var(--green-tree);">
-              <i class="fas fa-share-nodes"></i> Partager
-            </button>
-          </div>
+        </div>
+
+        <!-- Pagination -->
+        <div v-if="lastPage > 1" class="pagination mt-10">
+          <button class="page-btn" :disabled="currentPage <= 1" @click="currentPage--; fetchParcelles()"><i class="fas fa-chevron-left text-xs"></i></button>
+          <button v-for="p in Math.min(lastPage, 8)" :key="p" class="page-btn" :class="p === currentPage ? 'active' : ''" @click="currentPage = p; fetchParcelles()">{{ p }}</button>
+          <button class="page-btn" :disabled="currentPage >= lastPage" @click="currentPage++; fetchParcelles()"><i class="fas fa-chevron-right text-xs"></i></button>
         </div>
       </div>
-    </div>
-
-    <div v-if="lastPage > 1" class="flex items-center justify-center gap-2 mt-8">
-      <button class="btn-outline btn-sm" :disabled="currentPage <= 1" @click="changePage(currentPage - 1)">Précédent</button>
-      <template v-for="page in lastPage" :key="page">
-        <button v-if="page === currentPage || page === 1 || page === lastPage || Math.abs(page - currentPage) <= 1"
-          class="btn-sm font-medium transition-all"
-          :style="page === currentPage ? { background: 'var(--green-tree)', color: 'white', border: 'none' } : { background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)' }"
-          @click="changePage(page)">
-          {{ page }}
-        </button>
-        <span v-else-if="page === currentPage - 2 || page === currentPage + 2" key="dots" style="color: var(--text-secondary);">...</span>
-      </template>
-      <button class="btn-outline btn-sm" :disabled="currentPage >= lastPage" @click="changePage(currentPage + 1)">Suivant</button>
-    </div>
+    </section>
   </div>
 </template>

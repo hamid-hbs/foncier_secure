@@ -3,126 +3,86 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\DossierTransaction;
 use App\Models\Facture;
-use App\Services\BlockchainService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 class FactureController extends Controller
 {
-    public function index(DossierTransaction $dossierTransaction): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(
-            $dossierTransaction->factures()->with('emetteur')->latest()->get()
-        );
+        $user = $request->user();
+
+        $factures = Facture::with('emetteur')
+            ->where('emetteur_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
+
+        return response()->json($factures);
     }
 
-    public function store(Request $request, DossierTransaction $dossierTransaction): JsonResponse
+    public function show(Facture $facture): JsonResponse
     {
-        if ($dossierTransaction->notaire_id !== $request->user()->id) {
-            return response()->json(['message' => 'Seul le notaire responsable peut creer une facture'], 403);
-        }
+        return response()->json($facture->load('emetteur', 'facturable'));
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $allowed = $request->user()->hasRole('notaire')
+            ? 'App\Models\DossierTransaction,App\Models\Mission'
+            : 'App\Models\Mission';
 
         $validated = $request->validate([
+            'facturable_type' => 'required|in:' . $allowed,
+            'facturable_id' => 'required|integer',
             'montant' => 'required|numeric|min:0',
             'description' => 'nullable|string|max:1000',
         ]);
 
         $facture = Facture::create([
-            'dossier_id' => $dossierTransaction->id,
+            'facturable_type' => $validated['facturable_type'],
+            'facturable_id' => $validated['facturable_id'],
             'emetteur_id' => $request->user()->id,
+            'reference' => 'FAC-' . strtoupper(uniqid()),
             'montant' => $validated['montant'],
             'description' => $validated['description'] ?? null,
-            'statut' => 'brouillon',
         ]);
-
-        app(BlockchainService::class)->log(
-            'facture_creer',
-            $request->user()->id,
-            'facture',
-            $facture->id,
-            ['dossier_id' => $dossierTransaction->id, 'montant' => $facture->montant]
-        );
 
         return response()->json($facture->load('emetteur'), 201);
     }
 
-    public function show(Facture $facture): JsonResponse
-    {
-        return response()->json($facture->load(['emetteur', 'dossier']));
-    }
-
     public function update(Request $request, Facture $facture): JsonResponse
     {
-        if ($facture->emetteur_id !== $request->user()->id) {
-            return response()->json(['message' => 'Seul l\'emetteur peut modifier'], 403);
-        }
-
-        if ($facture->statut !== 'brouillon') {
-            return response()->json(['message' => 'Impossible de modifier une facture envoyee ou payee'], 400);
-        }
-
         $validated = $request->validate([
-            'montant' => 'required|numeric|min:0',
+            'montant' => 'nullable|numeric|min:0',
             'description' => 'nullable|string|max:1000',
+            'statut' => 'nullable|in:brouillon,envoyee,payee,annulee',
         ]);
 
         $facture->update($validated);
-
-        return response()->json($facture->load('emetteur'));
+        return response()->json($facture);
     }
 
-    public function envoyer(Request $request, Facture $facture): JsonResponse
+    public function envoyer(Facture $facture): JsonResponse
     {
-        if ($facture->emetteur_id !== $request->user()->id) {
-            return response()->json(['message' => 'Seul l\'emetteur peut envoyer'], 403);
-        }
-
-        $facture->update([
-            'statut' => 'envoyee',
-            'envoyee_le' => now(),
-        ]);
-
-        app(BlockchainService::class)->log(
-            'facture_envoyee',
-            $request->user()->id,
-            'facture',
-            $facture->id,
-            ['dossier_id' => $facture->dossier_id]
-        );
-
-        return response()->json($facture->load('emetteur'));
+        $facture->update(['statut' => 'envoyee', 'envoyee_le' => now()]);
+        return response()->json($facture);
     }
 
-    public function marquerPayee(Request $request, Facture $facture): JsonResponse
+    public function marquerPayee(Facture $facture): JsonResponse
     {
-        if ($facture->emetteur_id !== $request->user()->id) {
-            return response()->json(['message' => 'Seul l\'emetteur peut confirmer le paiement'], 403);
-        }
-
-        $facture->update([
-            'statut' => 'payee',
-            'payee_le' => now(),
-        ]);
-
-        app(BlockchainService::class)->log(
-            'facture_payee',
-            $request->user()->id,
-            'facture',
-            $facture->id,
-            ['dossier_id' => $facture->dossier_id]
-        );
-
-        return response()->json($facture->load('emetteur'));
+        $facture->update(['statut' => 'payee', 'payee_le' => now()]);
+        return response()->json($facture);
     }
 
-    public function telechargerPdf(Facture $facture)
+    public function telechargerPdf(Facture $facture): Response
     {
-        $facture->load(['emetteur', 'dossier.parcelle', 'dossier.vendeur', 'dossier.acheteur']);
-
         $pdf = Pdf::loadView('rapports.facture', ['facture' => $facture]);
-        return $pdf->download('facture_' . $facture->reference . '.pdf');
+
+        return response($pdf->output(), 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="facture-' . $facture->reference . '.pdf"');
     }
 }

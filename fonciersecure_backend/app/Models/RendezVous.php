@@ -9,20 +9,27 @@ class RendezVous extends Model
     protected $table = 'rendez_vous';
 
     protected $fillable = [
-        'dossier_id',
-        'type',
-        'date_prevue',
-        'lieu',
-        'statut',
+        'type', 'lie_type', 'lie_id', 'lieu', 'date_time',
+        'organisateur_id', 'statut', 'tous_confirmes',
     ];
 
-    public function dossier()
+    protected $casts = [
+        'date_time' => 'datetime',
+        'tous_confirmes' => 'boolean',
+    ];
+
+    public function lie()
     {
-        return $this->belongsTo(DossierTransaction::class, 'dossier_id');
+        return $this->morphTo();
     }
 
-    public function confirmations()
+    public function organisateur()
     {
-        return $this->hasMany(ConfirmationRendezVous::class, 'rendez_vous_id');
+        return $this->belongsTo(User::class, 'organisateur_id');
+    }
+
+    public function participants()
+    {
+        return $this->hasMany(RendezVousParticipant::class);
     }
 }

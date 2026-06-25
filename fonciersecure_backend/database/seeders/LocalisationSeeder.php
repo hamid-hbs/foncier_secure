@@ -11,70 +11,34 @@ class LocalisationSeeder extends Seeder
 {
     public function run(): void
     {
-        $cotonou = Commune::create(['nom' => 'Cotonou']);
-        $calavi = Commune::create(['nom' => 'Abomey-Calavi']);
-        $portoNovo = Commune::create(['nom' => 'Porto-Novo']);
-        $parakou = Commune::create(['nom' => 'Parakou']);
-        $lokossa = Commune::create(['nom' => 'Lokossa']);
+        $cotonou = Commune::create(['nom' => 'Cotonou', 'code_commune' => 'CO', 'departement' => 'Littoral', 'latitude' => 6.367, 'longitude' => 2.425]);
+        $pk11 = Arrondissement::create(['commune_id' => $cotonou->id, 'code_arrondissement' => 'CO-11', 'nom' => '11ᵉ Arrondissement']);
+        $pk13 = Arrondissement::create(['commune_id' => $cotonou->id, 'code_arrondissement' => 'CO-13', 'nom' => '13ᵉ Arrondissement']);
+        foreach ([
+            ['arrondissement_id' => $pk11->id, 'nom' => 'Gbégamey', 'latitude' => 6.367, 'longitude' => 2.425],
+            ['arrondissement_id' => $pk11->id, 'nom' => 'Agla'],
+            ['arrondissement_id' => $pk13->id, 'nom' => 'Fidjrossè'],
+            ['arrondissement_id' => $pk13->id, 'nom' => 'Lomé'],
+        ] as $q) { Quartier::create($q); }
 
-        $cotonouArr1 = Arrondissement::create(['nom' => '1er Arrondissement', 'commune_id' => $cotonou->id]);
-        $cotonouArr2 = Arrondissement::create(['nom' => '2ème Arrondissement', 'commune_id' => $cotonou->id]);
-        $cotonouArr3 = Arrondissement::create(['nom' => '3ème Arrondissement', 'commune_id' => $cotonou->id]);
-        $cotonouArr4 = Arrondissement::create(['nom' => '4ème Arrondissement', 'commune_id' => $cotonou->id]);
-        $cotonouArr5 = Arrondissement::create(['nom' => '5ème Arrondissement', 'commune_id' => $cotonou->id]);
-        $cotonouArr6 = Arrondissement::create(['nom' => '6ème Arrondissement', 'commune_id' => $cotonou->id]);
-        $cotonouArr7 = Arrondissement::create(['nom' => '7ème Arrondissement', 'commune_id' => $cotonou->id]);
-        $cotonouArr8 = Arrondissement::create(['nom' => '8ème Arrondissement', 'commune_id' => $cotonou->id]);
-        $cotonouArr9 = Arrondissement::create(['nom' => '9ème Arrondissement', 'commune_id' => $cotonou->id]);
-        $cotonouArr10 = Arrondissement::create(['nom' => '10ème Arrondissement', 'commune_id' => $cotonou->id]);
-        $cotonouArr11 = Arrondissement::create(['nom' => '11ème Arrondissement', 'commune_id' => $cotonou->id]);
-        $cotonouArr12 = Arrondissement::create(['nom' => '12ème Arrondissement', 'commune_id' => $cotonou->id]);
-        $cotonouArr13 = Arrondissement::create(['nom' => '13ème Arrondissement', 'commune_id' => $cotonou->id]);
+        $pn = Commune::create(['nom' => 'Porto-Novo', 'code_commune' => 'PN', 'departement' => 'Ouémé', 'latitude' => 6.478, 'longitude' => 2.608]);
+        $ouando = Arrondissement::create(['commune_id' => $pn->id, 'code_arrondissement' => 'PN-OD', 'nom' => 'Ouando']);
+        $totale = Arrondissement::create(['commune_id' => $pn->id, 'code_arrondissement' => 'PN-TT', 'nom' => 'Totale']);
+        foreach ([
+            ['arrondissement_id' => $ouando->id, 'nom' => 'Agoè'],
+            ['arrondissement_id' => $ouando->id, 'nom' => 'Dowa'],
+            ['arrondissement_id' => $totale->id, 'nom' => 'Oganla'],
+            ['arrondissement_id' => $totale->id, 'nom' => 'Dokè'],
+        ] as $q) { Quartier::create($q); }
 
-        $calaviArr1 = Arrondissement::create(['nom' => '1er Arrondissement', 'commune_id' => $calavi->id]);
-        $calaviArr2 = Arrondissement::create(['nom' => '2ème Arrondissement', 'commune_id' => $calavi->id]);
-        $calaviArr3 = Arrondissement::create(['nom' => '3ème Arrondissement', 'commune_id' => $calavi->id]);
-
-        $pnArr1 = Arrondissement::create(['nom' => '1er Arrondissement', 'commune_id' => $portoNovo->id]);
-        $pnArr2 = Arrondissement::create(['nom' => '2ème Arrondissement', 'commune_id' => $portoNovo->id]);
-        $pnArr3 = Arrondissement::create(['nom' => '3ème Arrondissement', 'commune_id' => $portoNovo->id]);
-
-        $parakouArr1 = Arrondissement::create(['nom' => '1er Arrondissement', 'commune_id' => $parakou->id]);
-        $parakouArr2 = Arrondissement::create(['nom' => '2ème Arrondissement', 'commune_id' => $parakou->id]);
-        $parakouArr3 = Arrondissement::create(['nom' => '3ème Arrondissement', 'commune_id' => $parakou->id]);
-
-        $lokossaArr = Arrondissement::create(['nom' => 'Arrondissement Central', 'commune_id' => $lokossa->id]);
-
-        $quartiers = [
-            [$cotonouArr1->id, ['Ganhi', 'Guinkomè', 'Suru Léré']],
-            [$cotonouArr2->id, ['Jéricho', 'Ahouansori', 'Agondji']],
-            [$cotonouArr3->id, ['Gbégamey', 'Gangban', 'Amidaho']],
-            [$cotonouArr4->id, ['Akpakpa', 'Agla', 'Sainte Cécile']],
-            [$cotonouArr5->id, ['Gbèto', 'Avotrou', 'Mènontin']],
-            [$cotonouArr6->id, ['Fidjrossè', 'Kpota', 'Kouhounou']],
-            [$cotonouArr7->id, ['Vossa', 'Donaten', 'Aïdjèdo']],
-            [$cotonouArr8->id, ['Enagnon', 'Hlazounto', 'Dédokpo']],
-            [$cotonouArr9->id, ['Sainte Cécile', 'Agla Sud', 'Ahouansori']],
-            [$cotonouArr10->id, ['Dandji', 'Hôpital', 'Commerce']],
-            [$cotonouArr11->id, ['Gbèto Nord', 'Aïdjèdo', 'Tokplegbè']],
-            [$cotonouArr12->id, ['Ganhi Ouest', 'Suru Léré', 'Gbènamè']],
-            [$cotonouArr13->id, ['Kouhounou', 'Sènadé', 'Agontinkon']],
-            [$calaviArr1->id, ['Zogbadjè', 'Tokpa', 'Glo-Djigbé']],
-            [$calaviArr2->id, ['Akassato', 'Ouèdo', 'Togoudo']],
-            [$calaviArr3->id, ['Godomey', 'Kpota Calavi', 'Zènan']],
-            [$pnArr1->id, ['Ouando', 'Sèkèrè', 'Dowa']],
-            [$pnArr2->id, ['Djèrègbè', 'Akpakpa Porto', 'Tokple']],
-            [$pnArr3->id, ['Ponka', 'Gounoukogbé', 'Setto']],
-            [$parakouArr1->id, ['Camp Guezo', 'Albarika', 'Bawéra']],
-            [$parakouArr2->id, ['Zongo', 'Banikanni', 'Kpérou']],
-            [$parakouArr3->id, ['Maro', 'Sabouta', 'Béthol']],
-            [$lokossaArr->id, ['Centre', 'Agbara', 'Kpodji']],
-        ];
-
-        foreach ($quartiers as [$arrId, $noms]) {
-            foreach ($noms as $nom) {
-                Quartier::create(['nom' => $nom, 'arrondissement_id' => $arrId]);
-            }
-        }
+        $pk = Commune::create(['nom' => 'Parakou', 'code_commune' => 'PK', 'departement' => 'Borgou', 'latitude' => 9.340, 'longitude' => 2.620]);
+        $pk1 = Arrondissement::create(['commune_id' => $pk->id, 'code_arrondissement' => 'PK-1', 'nom' => '1ᵉʳ Arrondissement']);
+        $pk3 = Arrondissement::create(['commune_id' => $pk->id, 'code_arrondissement' => 'PK-3', 'nom' => '3ᵉ Arrondissement']);
+        foreach ([
+            ['arrondissement_id' => $pk1->id, 'nom' => 'Zongo'],
+            ['arrondissement_id' => $pk1->id, 'nom' => 'Dépôt'],
+            ['arrondissement_id' => $pk3->id, 'nom' => 'Kpébié'],
+            ['arrondissement_id' => $pk3->id, 'nom' => 'Albarika'],
+        ] as $q) { Quartier::create($q); }
     }
 }

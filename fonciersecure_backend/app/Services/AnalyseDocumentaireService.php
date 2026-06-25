@@ -2,60 +2,71 @@
 
 namespace App\Services;
 
-use App\Models\AnalyseAutomatique;
-use App\Models\DocumentVerification;
+use App\Models\Analyse;
+use App\Models\Document;
+use App\Models\DossierTransaction;
+use App\Models\Parcelle;
 use App\Models\Professionnel;
-use App\Models\Verification;
+use Illuminate\Database\Eloquent\Model;
 
 class AnalyseDocumentaireService
 {
-    public function analyser(Verification $verification): array
+    public function analyser(Model $analysable, array $documentIds = []): array
     {
+        $documents = Document::whereIn('id', $documentIds)->get();
+
         $resultats = [];
 
-        $resultats[] = $this->analyseCoherence($verification);
-        $resultats[] = $this->analyseDoublon($verification);
-        $resultats[] = $this->analyseGPS($verification);
-        $resultats[] = $this->analyseValiditeProfessionnels($verification);
+        if ($documents->isNotEmpty()) {
+            $resultats[] = $this->analyserCoherence($analysable, $documents);
+            $resultats[] = $this->analyserDoublon($analysable, $documents);
+        }
+
+        if ($analysable instanceof Parcelle || $analysable->parcelle ?? null) {
+            $parcelle = $analysable instanceof Parcelle ? $analysable : $analysable->parcelle;
+            $resultats[] = $this->analyserGPS($analysable, $parcelle);
+        }
+
+        if ($analysable instanceof DossierTransaction) {
+            $resultats[] = $this->analyserValiditeProfessionnels($analysable, $documents);
+        }
 
         return $resultats;
     }
 
-    private function analyseCoherence(Verification $verification): AnalyseAutomatique
+    public function analyserCoherence(Model $analysable, $documents): Analyse
     {
-        $documents = $verification->documents;
         $incoherences = [];
 
-        $tfNames = $documents->where('type_document', 'tf')->pluck('nom_fichier');
-        $adcNames = $documents->where('type_document', 'adc')->pluck('nom_fichier');
+        $tfDocs = $documents->where('type_document', 'tf');
+        $adcDocs = $documents->where('type_document', 'adc');
 
-        if ($tfNames->isNotEmpty() && $adcNames->isNotEmpty()) {
-            $tfBase = $tfNames->first();
-            $adcBase = $adcNames->first();
-            if (!str_contains($tfBase, explode('.', $adcBase)[0] ?? '')
-                && !str_contains($adcBase, explode('.', $tfBase)[0] ?? '')) {
-                $incoherences[] = 'Les noms sur le TF et l\'ADC ne correspondent pas';
+        foreach ($tfDocs as $tf) {
+            foreach ($adcDocs as $adc) {
+                $tfBase = pathinfo($tf->nom_fichier, PATHINFO_FILENAME);
+                $adcBase = pathinfo($adc->nom_fichier, PATHINFO_FILENAME);
+                if (!str_contains($tfBase, $adcBase) && !str_contains($adcBase, $tfBase)) {
+                    $incoherences[] = "Le TF ({$tf->nom_fichier}) et l'ADC ({$adc->nom_fichier}) ne correspondent pas";
+                }
             }
         }
 
         $resultat = empty($incoherences) ? 'conforme' : 'non_conforme';
 
-        return AnalyseAutomatique::create([
-            'verification_id' => $verification->id,
+        return $analysable->analyses()->create([
             'type_analyse' => 'coherence',
             'resultat' => $resultat,
             'details' => ['incoherences' => $incoherences, 'documents_verifies' => $documents->count()],
         ]);
     }
 
-    private function analyseDoublon(Verification $verification): AnalyseAutomatique
+    public function analyserDoublon(Model $analysable, $documents): Analyse
     {
-        $documents = $verification->documents;
         $doublons = [];
 
         foreach ($documents as $doc) {
-            $exists = DocumentVerification::where('hash_sha256', $doc->hash_sha256)
-                ->where('verification_id', '!=', $verification->id)
+            $exists = Document::where('hash_sha256', $doc->hash_sha256)
+                ->where('id', '!=', $doc->id)
                 ->exists();
 
             if ($exists) {
@@ -65,55 +76,54 @@ class AnalyseDocumentaireService
 
         $resultat = empty($doublons) ? 'conforme' : 'non_conforme';
 
-        return AnalyseAutomatique::create([
-            'verification_id' => $verification->id,
+        return $analysable->analyses()->create([
             'type_analyse' => 'doublon',
             'resultat' => $resultat,
             'details' => ['doublons' => $doublons, 'total_documents' => $documents->count()],
         ]);
     }
 
-    private function analyseGPS(Verification $verification): AnalyseAutomatique
+    public function analyserGPS(Model $analysable, Parcelle $parcelle): Analyse
     {
-        $parcelle = $verification->parcelle;
-        if ($parcelle && $parcelle->latitude && $parcelle->longitude) {
+        if ($parcelle->latitude && $parcelle->longitude) {
             $resultat = 'conforme';
-            $details = ['gps_present' => true, 'latitude' => $parcelle->latitude, 'longitude' => $parcelle->longitude];
+            $details = [
+                'gps_present' => true,
+                'latitude' => $parcelle->latitude,
+                'longitude' => $parcelle->longitude,
+            ];
         } else {
             $resultat = 'alerte';
             $details = ['gps_present' => false, 'message' => 'Coordonnées GPS manquantes sur la parcelle'];
         }
 
-        return AnalyseAutomatique::create([
-            'verification_id' => $verification->id,
+        return $analysable->analyses()->create([
             'type_analyse' => 'gps',
             'resultat' => $resultat,
             'details' => $details,
         ]);
     }
 
-    private function analyseValiditeProfessionnels(Verification $verification): AnalyseAutomatique
+    public function analyserValiditeProfessionnels(Model $analysable, $documents): Analyse
     {
         $problemes = [];
 
-        $intervention = $verification->intervention;
-        if ($intervention && $intervention->geometre_id) {
-            $pro = Professionnel::where('user_id', $intervention->geometre_id)
-                ->where('type', 'geometre')
-                ->first();
-            if (!$pro) {
-                $problemes[] = 'Le géomètre intervenant n\'est pas inscrit au registre des professionnels';
-            }
+        $notaire = $analysable->notaire;
+        if ($notaire && !Professionnel::where('user_id', $notaire->id)->where('type', 'notaire')->exists()) {
+            $problemes[] = 'Le notaire assigné n\'est pas inscrit au registre des professionnels';
+        }
+
+        $geometre = $analysable->parcelle?->missions()?->first()?->geometre;
+        if ($geometre && !Professionnel::where('user_id', $geometre->id)->where('type', 'geometre')->exists()) {
+            $problemes[] = 'Le géomètre intervenant n\'est pas inscrit au registre des professionnels';
         }
 
         $resultat = empty($problemes) ? 'conforme' : 'alerte';
 
-        return AnalyseAutomatique::create([
-            'verification_id' => $verification->id,
+        return $analysable->analyses()->create([
             'type_analyse' => 'validite_professionnels',
             'resultat' => $resultat,
-            'details' => ['problemes' => $problemes, 'professionnels_verifies' => $intervention ? 1 : 0],
+            'details' => ['problemes' => $problemes, 'professionnels_verifies' => $notaire ? 1 : 0],
         ]);
     }
-
 }

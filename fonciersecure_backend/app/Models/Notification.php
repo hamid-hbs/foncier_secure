@@ -7,19 +7,22 @@ use Illuminate\Database\Eloquent\Model;
 class Notification extends Model
 {
     protected $fillable = [
-        'type', 'notifiable_id', 'notifiable_type', 'data', 'read_at',
+        'user_id', 'notifiable_type', 'notifiable_id', 'titre',
+        'message', 'type_action', 'lien_redirection', 'est_lue', 'date_lu',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'data' => 'array',
-            'read_at' => 'datetime',
-        ];
-    }
+    protected $casts = [
+        'est_lue' => 'boolean',
+        'date_lu' => 'datetime',
+    ];
 
     public function notifiable()
     {
         return $this->morphTo();
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

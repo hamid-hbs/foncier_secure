@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import cartographieApi from '@/api/cartographie'
-import { goBack } from '@/utils/navigation'
 
 const router = useRouter()
 const data = ref(null)
@@ -21,9 +20,8 @@ const professionnels = computed(() => data.value?.professionnels || [])
 const activiteRecente = computed(() => data.value?.activite_recente || [])
 
 const markerStyles = {
-  parcelle: { color: '#2D6A4F', icon: 'fa-map-pin' },
-
-  verification: { color: '#D4A373', icon: 'fa-shield-halved' },
+  parcelle: { color: '#2d6a4f', icon: 'fa-map-pin' },
+  verification: { color: '#e8a020', icon: 'fa-shield-halved' },
 }
 
 function isValidPoint(point) {
@@ -36,11 +34,7 @@ function makeIcon(type) {
   const style = markerStyles[type] || markerStyles.parcelle
   return L.divIcon({
     className: '',
-    html: `
-      <div class="map-marker" style="--marker-color: ${style.color}">
-        <i class="fas ${style.icon}"></i>
-      </div>
-    `,
+    html: `<div class="map-marker" style="--marker-color: ${style.color}"><i class="fas ${style.icon}"></i></div>`,
     iconSize: [34, 34],
     iconAnchor: [17, 32],
     popupAnchor: [0, -28],
@@ -48,13 +42,13 @@ function makeIcon(type) {
 }
 
 function popupForParcelle(p) {
-  const location = [p.commune, p.arrondissement].filter(Boolean).join(', ') || 'Localisation non renseignee'
+  const location = [p.commune, p.arrondissement].filter(Boolean).join(', ') || 'Localisation inconnue'
   return `
     <div class="map-popup">
-      <strong>${p.titre || 'Parcelle declaree'}</strong>
+      <strong>${p.titre || 'Parcelle déclarée'}</strong>
       <span>${location}</span>
-      <span>Statut: ${p.statut || 'libre'}</span>
-      ${p.superficie ? `<span>Superficie: ${p.superficie} m2</span>` : ''}
+      <span>Statut : ${(p.statut || 'libre').replace('_', ' ')}</span>
+      ${p.superficie ? `<span>Superficie : ${p.superficie} m²</span>` : ''}
       <button type="button" data-parcelle-id="${p.id}">Voir la parcelle</button>
     </div>
   `
@@ -63,8 +57,8 @@ function popupForParcelle(p) {
 function popupForVerification(point) {
   return `
     <div class="map-popup">
-      <strong>${point.titre || 'Verification a risque'}</strong>
-      <span>Score: ${point.score ?? 'N/A'}</span>
+      <strong>${point.titre || 'Vérification à risque'}</strong>
+      <span>Score : ${point.score ?? 'N/A'}</span>
     </div>
   `
 }
@@ -78,7 +72,6 @@ function addMarker(point, type, popupHtml) {
 
 function renderMarkers() {
   if (!map || !markersLayer) return
-
   markersLayer.clearLayers()
   const bounds = []
 
@@ -101,19 +94,12 @@ function renderMarkers() {
 
 function initMap() {
   if (map || !mapEl.value) return
-
-  map = L.map(mapEl.value, {
-    zoomControl: true,
-    scrollWheelZoom: true,
-  }).setView([9.3077, 2.3158], 7)
-
+  map = L.map(mapEl.value, { zoomControl: true, scrollWheelZoom: true }).setView([9.3077, 2.3158], 7)
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors',
     maxZoom: 19,
   }).addTo(map)
-
   markersLayer = L.layerGroup().addTo(map)
-
   map.on('popupopen', (event) => {
     const button = event.popup.getElement()?.querySelector('[data-parcelle-id]')
     if (button) {
@@ -122,7 +108,6 @@ function initMap() {
       }, { once: true })
     }
   })
-
   renderMarkers()
 }
 
@@ -137,132 +122,132 @@ async function fetchData() {
     initMap()
     renderMarkers()
     setTimeout(() => map?.invalidateSize(), 50)
-  } catch {
+  } catch (e) { console.error('Erreur chargement couches cartographie:', e)
     data.value = null
   }
   loading.value = false
 }
 
-watch(data, () => {
-  nextTick(() => {
-    initMap()
-    renderMarkers()
-  })
-})
-
+watch(data, () => nextTick(() => { initMap(); renderMarkers() }))
 onMounted(fetchData)
-onUnmounted(() => {
-  if (map) {
-    map.remove()
-    map = null
-    markersLayer = null
-  }
-})
+onUnmounted(() => { if (map) { map.remove(); map = null; markersLayer = null } })
 </script>
 
 <template>
-  <div class="page-container">
-    <button @click="goBack(router)" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-      <i class="fas fa-arrow-left"></i> Retour
-    </button>
-
-    <div class="flex items-center gap-3 mb-6">
-      <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--bg-page);">
-        <i class="fas fa-map" style="color: var(--green-tree);"></i>
+  <div>
+    <!-- Header -->
+    <section class="py-14 relative overflow-hidden" style="background: var(--brand-dark);">
+      <div class="absolute inset-0 opacity-10 pointer-events-none">
+        <div class="absolute -top-16 left-1/4 w-80 h-80 rounded-full" style="background: radial-gradient(circle, #40916c, transparent);"></div>
       </div>
-      <div>
-        <h1 class="section-title">Cartographie</h1>
-        <p class="section-subtitle">Parcelles declarees et alertes foncieres geolocalisees</p>
+      <div class="max-w-7xl mx-auto px-5 sm:px-8 relative z-10">
+        <div class="text-center mb-8">
+          <span class="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest text-gold bg-gold/15 mb-4">Cartographie</span>
+          <h1 class="font-display font-extrabold text-4xl sm:text-5xl text-white mb-3">Carte foncière du Bénin</h1>
+          <p class="text-white/60 text-lg">Parcelles et alertes géolocalisées en temps réel</p>
+        </div>
+
+        <!-- Filters -->
+        <div class="max-w-sm mx-auto flex gap-3">
+          <select v-model="periode" class="form-select flex-1" @change="fetchData">
+            <option value="">Toutes les données</option>
+            <option value="1mois">1 mois</option>
+            <option value="6mois">6 mois</option>
+            <option value="1an">1 an</option>
+          </select>
+          <button @click="fetchData" class="btn btn-outline text-white border-white/20 hover:bg-white/10 shrink-0">
+            <i class="fas fa-rotate"></i>
+          </button>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="card p-4 mb-6">
-      <div class="flex flex-wrap items-center gap-4">
-        <label class="form-label mb-0">Periode</label>
-        <select v-model="periode" class="form-select max-w-[220px]" @change="fetchData">
-          <option value="">Toutes les donnees</option>
-          <option value="1mois">1 mois</option>
-          <option value="6mois">6 mois</option>
-          <option value="1an">1 an</option>
-        </select>
-        <button class="btn-green btn-sm" @click="fetchData">
-          <i class="fas fa-rotate"></i> Actualiser
-        </button>
+    <!-- Map section -->
+    <section class="py-8 bg-stone-50">
+      <div class="max-w-7xl mx-auto px-5 sm:px-8">
+        <div class="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
+          <!-- Map -->
+          <div class="card p-0 overflow-hidden shadow-xl">
+            <div v-if="loading" class="flex items-center justify-center bg-stone-100" style="height: 540px;">
+              <div class="text-center">
+                <div class="spinner w-10 h-10 border-stone-200 border-t-brand mb-4"></div>
+                <p class="text-sm text-stone-400 font-medium">Chargement de la carte…</p>
+              </div>
+            </div>
+            <div v-show="!loading" ref="mapEl" style="height: 540px; width: 100%;"></div>
+          </div>
+
+          <!-- Legend & Stats -->
+          <div class="space-y-4">
+            <!-- Legend -->
+            <div class="card">
+              <h3 class="font-display font-bold text-stone-900 mb-4 flex items-center gap-2">
+                <i class="fas fa-circle-info text-brand text-sm"></i> Légende
+              </h3>
+              <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px]" style="background: var(--brand);">
+                      <i class="fas fa-map-pin"></i>
+                    </div>
+                    <span class="text-sm font-semibold text-stone-700">Parcelles</span>
+                  </div>
+                  <span class="font-display font-extrabold text-brand text-xl">{{ parcelles.length }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px]" style="background: var(--gold-dark);">
+                      <i class="fas fa-shield-halved"></i>
+                    </div>
+                    <span class="text-sm font-semibold text-stone-700">Alertes vérification</span>
+                  </div>
+                  <span class="font-display font-extrabold text-gold-dark text-xl">{{ terrainsSignales.length }}</span>
+                </div>
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-7 h-7 rounded-xl bg-stone-100 flex items-center justify-center text-stone-500 text-[10px]">
+                      <i class="fas fa-user-tie"></i>
+                    </div>
+                    <span class="text-sm font-semibold text-stone-700">Professionnels</span>
+                  </div>
+                  <span class="font-display font-extrabold text-stone-700 text-xl">{{ professionnels.length }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Activité récente -->
+            <div class="card flex-1">
+              <h3 class="font-display font-bold text-stone-900 mb-4 flex items-center gap-2">
+                <i class="fas fa-bolt text-gold text-sm"></i> Activité récente
+              </h3>
+              <div v-if="activiteRecente.length" class="space-y-3">
+                <div v-for="item in activiteRecente.slice(0, 6)" :key="`${item.type}-${item.date}`"
+                  class="flex items-start gap-3 py-2 border-b border-stone-50 last:border-0">
+                  <div class="w-7 h-7 rounded-lg bg-brand-50 flex items-center justify-center text-brand shrink-0 text-xs mt-0.5">
+                    <i :class="['fas', item.type === 'transaction' ? 'fa-file-signature' : item.type === 'verification' ? 'fa-shield-halved' : 'fa-map-pin']"></i>
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold text-stone-900 truncate">{{ item.titre || item.type }}</p>
+                    <p class="text-xs text-stone-400 capitalize">{{ item.type }} · {{ item.statut }}</p>
+                  </div>
+                </div>
+              </div>
+              <p v-else class="text-sm text-stone-400 text-center py-4">Aucune activité récente</p>
+            </div>
+
+            <!-- No GPS notice -->
+            <div v-if="!loading && parcelles.length === 0" class="alert alert-info">
+              <i class="fas fa-info-circle shrink-0"></i>
+              <span class="text-xs">Aucune parcelle avec coordonnées GPS enregistrées.</span>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-
-    <div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
-      <section class="card p-0 overflow-hidden">
-        <div v-if="loading" class="flex-center" style="height: 560px;">
-          <div class="w-8 h-8 border-2 rounded-full animate-spin" style="border-color: var(--green-tree); border-top-color: transparent;"></div>
-        </div>
-        <div v-show="!loading" ref="mapEl" class="cartographie-map"></div>
-      </section>
-
-      <aside class="space-y-4">
-        <div class="card-sm">
-          <div class="flex items-center gap-3">
-            <span class="legend-dot" style="background: var(--green-tree);"></span>
-            <div>
-              <p class="text-2xl font-bold" style="color: var(--text-primary);">{{ parcelles.length }}</p>
-              <p class="text-sm" style="color: var(--text-secondary);">Parcelles declarees</p>
-            </div>
-          </div>
-        </div>
-        <div class="card-sm">
-          <div class="flex items-center gap-3">
-            <span class="legend-dot" style="background: var(--gold);"></span>
-            <div>
-              <p class="text-2xl font-bold" style="color: var(--text-primary);">{{ terrainsSignales.length }}</p>
-              <p class="text-sm" style="color: var(--text-secondary);">Verifications a risque</p>
-            </div>
-          </div>
-        </div>
-        <div class="card-sm">
-          <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: #F0F7F4;">
-              <i class="fas fa-user-tie" style="color: var(--green-tree);"></i>
-            </div>
-            <div>
-              <p class="text-2xl font-bold" style="color: var(--text-primary);">{{ professionnels.length }}</p>
-              <p class="text-sm" style="color: var(--text-secondary);">Professionnels actifs</p>
-            </div>
-          </div>
-        </div>
-        <div class="card-sm">
-          <h2 class="text-sm font-semibold mb-3" style="color: var(--text-primary);">Activite recente</h2>
-          <div v-if="activiteRecente.length" class="space-y-3">
-            <div v-for="item in activiteRecente.slice(0, 5)" :key="`${item.type}-${item.date}`" class="text-sm">
-              <p class="font-medium truncate" style="color: var(--text-primary);">{{ item.titre || item.type }}</p>
-              <p class="text-xs capitalize" style="color: var(--text-secondary);">{{ item.type }} - {{ item.statut }}</p>
-            </div>
-          </div>
-          <p v-else class="text-sm" style="color: var(--text-secondary);">Aucune activite recente.</p>
-        </div>
-      </aside>
-    </div>
-
-    <div v-if="!loading && parcelles.length === 0" class="card text-center py-8 mt-6">
-      <i class="fas fa-location-dot mb-3" style="color: #D1D5DB; font-size: 2.5rem;"></i>
-      <p style="color: var(--text-secondary);">Aucune parcelle avec coordonnees GPS pour le moment.</p>
-    </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.cartographie-map {
-  height: 560px;
-  width: 100%;
-  background: #e5e7eb;
-}
-
-.legend-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.05);
-}
-
 :deep(.map-marker) {
   width: 34px;
   height: 34px;
@@ -270,37 +255,46 @@ onUnmounted(() => {
   background: var(--marker-color);
   color: white;
   border: 3px solid white;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 :deep(.map-popup) {
-  min-width: 190px;
+  min-width: 200px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
 }
 
 :deep(.map-popup strong) {
   font-size: 14px;
+  font-weight: 700;
+  color: #1c1917;
 }
 
 :deep(.map-popup span) {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: #78716c;
 }
 
 :deep(.map-popup button) {
-  margin-top: 6px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: var(--green-tree);
+  margin-top: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #2d6a4f;
   color: white;
   font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s;
+}
+
+:deep(.map-popup button:hover) {
+  background: #40916c;
 }
 </style>

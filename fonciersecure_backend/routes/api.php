@@ -4,31 +4,29 @@ use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BlockchainController;
 use App\Http\Controllers\Api\CartographieController;
-use App\Http\Controllers\Api\CoffreController;
 use App\Http\Controllers\Api\DemandeAchatController;
+use App\Http\Controllers\Api\DocumentController;
+use App\Http\Controllers\Api\DossierTransactionController;
 use App\Http\Controllers\Api\FactureController;
 use App\Http\Controllers\Api\LocalisationController;
-use App\Http\Controllers\Api\ServiceGeometreController;
+use App\Http\Controllers\Api\MessageController;
+use App\Http\Controllers\Api\MissionController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ObservatoireController;
 use App\Http\Controllers\Api\ParcelleController;
 use App\Http\Controllers\Api\ProfessionnelController;
 use App\Http\Controllers\Api\RendezVousController;
 use App\Http\Controllers\Api\SupportTicketController;
-use App\Http\Controllers\Api\TransactionController;
-use App\Http\Controllers\Api\VerificationController;
 use Illuminate\Support\Facades\Route;
 
 // ═══════════════════════════════════════════════
-// ROUTES PUBLIQUES (sans auth)
+// ROUTES PUBLIQUES
 // ═══════════════════════════════════════════════
 
-Route::get('login', fn () => response()->json(['message' => 'Non authentifie'], 401))->name('login');
+Route::get('login', fn () => response()->json(['message' => 'Non authentifié'], 401))->name('login');
 
 Route::post('auth/register', [AuthController::class, 'register']);
 Route::post('auth/login', [AuthController::class, 'login']);
-Route::post('auth/forgot-password', [AuthController::class, 'sendOtp']);
-Route::post('auth/reset-password', [AuthController::class, 'resetPassword']);
 
 Route::get('localisation/communes', [LocalisationController::class, 'communes']);
 Route::get('localisation/arrondissements/{commune}', [LocalisationController::class, 'arrondissements']);
@@ -37,187 +35,181 @@ Route::get('localisation/quartiers/{arrondissement}', [LocalisationController::c
 Route::get('parcelles', [ParcelleController::class, 'index']);
 Route::get('parcelles/{parcelle}', [ParcelleController::class, 'show']);
 
-Route::get('cartographie/couches', [CartographieController::class, 'couches']);
-
-Route::get('observatoire', [ObservatoireController::class, 'index']);
-
 Route::get('professionnels', [ProfessionnelController::class, 'index']);
 Route::get('professionnels/{professionnel}', [ProfessionnelController::class, 'show']);
 
+Route::get('cartographie/couches', [CartographieController::class, 'couches']);
+Route::get('observatoire', [ObservatoireController::class, 'index']);
 Route::get('blockchain/verifier', [BlockchainController::class, 'verifier']);
 
 // ═══════════════════════════════════════════════
-// ROUTES AUTHENTIFIEES (Sanctum)
+// ROUTES AUTHENTIFIEES
 // ═══════════════════════════════════════════════
 
 Route::middleware('auth:sanctum')->group(function () {
 
-    // ─── Tous les utilisateurs connectes ──
+    // ─── Sans validation requise ──
     Route::post('auth/logout', [AuthController::class, 'logout']);
     Route::get('auth/profile', [AuthController::class, 'profile']);
+    Route::get('auth/dashboard', [AuthController::class, 'dashboard']);
     Route::put('auth/profile', [AuthController::class, 'updateProfile']);
-    Route::post('auth/request-role', [AuthController::class, 'requestRole']);
+    Route::delete('auth/account', [AuthController::class, 'deleteAccount']);
 
-    // ─── Notifications ──────────────────
-    Route::get('notifications', [NotificationController::class, 'index']);
-    Route::patch('notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
-    Route::get('notifications/non-lues', [NotificationController::class, 'unreadCount']);
+    // ─── Routes nécessitant compte approuvé ──
+    Route::middleware('account.approved')->group(function () {
 
-    // ─── Demandes d'achat (tous) ───────
-    Route::get('demandes-achat', [DemandeAchatController::class, 'index']);
-    Route::get('demandes-achat/{demandeAchat}', [DemandeAchatController::class, 'show']);
-    Route::get('demandes-achat/{demandeAchat}/messages', [DemandeAchatController::class, 'messages']);
-    Route::post('demandes-achat/{demandeAchat}/messages', [DemandeAchatController::class, 'envoyerMessage']);
+        // ─── Parcelles ──
+        Route::middleware('role:citoyen')->group(function () {
+            Route::post('parcelles', [ParcelleController::class, 'store']);
+            Route::put('parcelles/{parcelle}', [ParcelleController::class, 'update']);
+            Route::patch('parcelles/{parcelle}/statut', [ParcelleController::class, 'updateStatut']);
+            Route::post('parcelles/{parcelle}/documents', [ParcelleController::class, 'uploadDocument']);
+            Route::delete('parcelles/{parcelle}/documents/{documentId}', [ParcelleController::class, 'deleteDocument']);
+            Route::get('parcelles/{parcelle}/historique', [ParcelleController::class, 'historique']);
+        });
 
-    // ─── Citoyen ──────────────────────────
-    Route::middleware('role:citoyen')->group(function () {
-        Route::post('parcelles', [ParcelleController::class, 'store']);
-        Route::put('parcelles/{parcelle}', [ParcelleController::class, 'update']);
-        Route::post('parcelles/{parcelle}/documents', [ParcelleController::class, 'uploadDocument']);
-        Route::delete('parcelles/{parcelle}/documents/{documentId}', [ParcelleController::class, 'deleteDocument']);
-        Route::patch('parcelles/{parcelle}/statut', [ParcelleController::class, 'updateStatut']);
+        // ─── Demandes d'achat ──
+        Route::middleware('role:citoyen')->group(function () {
+            Route::post('demandes-achat', [DemandeAchatController::class, 'store']);
+            Route::post('demandes-achat/{demandeAchat}/solliciter-notaire', [DemandeAchatController::class, 'solliciterNotaire']);
+            Route::post('demandes-achat/{demandeAchat}/documents', [DemandeAchatController::class, 'uploadDocument']);
+        });
 
-        Route::post('demandes-achat', [DemandeAchatController::class, 'store']);
-        Route::patch('demandes-achat/{demandeAchat}/repondre', [DemandeAchatController::class, 'repondre']);
-        Route::post('demandes-achat/{demandeAchat}/documents', [DemandeAchatController::class, 'uploadDocument']);
+        Route::middleware('role:citoyen,notaire')->group(function () {
+            Route::get('demandes-achat', [DemandeAchatController::class, 'index']);
+            Route::get('demandes-achat/{demandeAchat}', [DemandeAchatController::class, 'show']);
+            Route::get('demandes-achat/{demandeAchat}/messages', [DemandeAchatController::class, 'messages']);
+            Route::post('demandes-achat/{demandeAchat}/messages', [DemandeAchatController::class, 'envoyerMessage']);
+            Route::get('demandes-achat/{demandeAchat}/documents', [DemandeAchatController::class, 'documents']);
+        });
 
-        Route::post('professionnels/{professionnel}/avis', [ProfessionnelController::class, 'donnerAvis']);
+        Route::middleware('role:citoyen,geometre,notaire')->group(function () {
+            Route::patch('demandes-achat/{demandeAchat}/accepter', [DemandeAchatController::class, 'accepter']);
+            Route::patch('demandes-achat/{demandeAchat}/refuser', [DemandeAchatController::class, 'refuser']);
+        });
 
-        Route::get('coffre/dossiers', [CoffreController::class, 'indexDossiers']);
-        Route::post('coffre/dossiers', [CoffreController::class, 'creerDossier']);
-        Route::post('coffre/dossiers/{coffreDossier}/documents', [CoffreController::class, 'uploadDocument']);
-        Route::get('coffre/documents/{coffreDocument}/telecharger', [CoffreController::class, 'telechargerDocument']);
-        Route::post('coffre/documents/{coffreDocument}/partager', [CoffreController::class, 'partagerDocument']);
-        Route::get('coffre/documents/{coffreDocument}/integrite', [CoffreController::class, 'verifierIntegrite']);
-    });
+        // ─── Dossiers de transaction ──
+        Route::middleware('role:notaire')->group(function () {
+            Route::post('dossiers-transaction', [DossierTransactionController::class, 'store']);
+            Route::post('dossiers-transaction/{dossierTransaction}/suspendre', [DossierTransactionController::class, 'suspendre']);
+            Route::post('dossiers-transaction/{dossierTransaction}/reouvrir', [DossierTransactionController::class, 'reouvrir']);
+            Route::post('dossiers-transaction/{dossierTransaction}/cloturer', [DossierTransactionController::class, 'cloturer']);
+            Route::post('dossiers-transaction/{dossierTransaction}/documents', [DossierTransactionController::class, 'ajouterDocument']);
+        });
 
-    // ─── Citoyen + Geometre ───────────────
-    Route::middleware('role:citoyen,geometre')->group(function () {
-        Route::get('verifications', [VerificationController::class, 'index']);
-        Route::get('verifications/{verification}', [VerificationController::class, 'show']);
-        Route::get('verifications/{verification}/rapport', [VerificationController::class, 'downloadRapport']);
-    });
+        Route::middleware('role:citoyen,notaire')->group(function () {
+            Route::get('dossiers-transaction', [DossierTransactionController::class, 'index']);
+            Route::get('dossiers-transaction/{dossierTransaction}', [DossierTransactionController::class, 'show']);
+            Route::get('dossiers-transaction/{dossierTransaction}/messages', [DossierTransactionController::class, 'messages']);
+            Route::post('dossiers-transaction/{dossierTransaction}/messages', [DossierTransactionController::class, 'envoyerMessage']);
+            Route::get('dossiers-transaction/{dossierTransaction}/documents', [DossierTransactionController::class, 'documents']);
+        });
 
-    // ─── Geometre ─────────────────────────
-    Route::middleware('role:geometre')->group(function () {
-        Route::get('geometre/missions', [VerificationController::class, 'missionsGeometre']);
-        Route::post('verifications/{verification}/rapport-geometre', [VerificationController::class, 'rapportGeometre']);
-    });
+        Route::middleware('role:citoyen')->group(function () {
+            Route::post('dossiers-transaction/{dossierTransaction}/valider', [DossierTransactionController::class, 'validerPartie']);
+        });
 
-    // ─── Transactions (tous les roles lies) ─
-    Route::middleware('role:citoyen,notaire,geometre')->group(function () {
-        Route::get('transactions', [TransactionController::class, 'index']);
-        Route::get('transactions/{dossierTransaction}', [TransactionController::class, 'show']);
-        Route::post('transactions/{dossierTransaction}/messages', [TransactionController::class, 'envoyerMessage']);
-        Route::get('transactions/{dossierTransaction}/messages', [TransactionController::class, 'messages']);
-        Route::post('transactions/{dossierTransaction}/documents', [TransactionController::class, 'ajouterDocument']);
-        Route::get('transactions/{dossierTransaction}/documents', [TransactionController::class, 'documents']);
-        Route::get('transactions/{dossierTransaction}/documents/{dossierDocument}/telecharger', [TransactionController::class, 'telechargerDocument']);
-        Route::post('transactions/{dossierTransaction}/valider-partie', [TransactionController::class, 'validerPartie']);
-    });
+        // ─── Missions (services géomètre) ──
+        Route::middleware('role:citoyen,geometre')->group(function () {
+            Route::get('missions', [MissionController::class, 'index']);
+            Route::get('missions/{mission}', [MissionController::class, 'show']);
+        });
 
-    // ─── Notaire (gestion des dossiers) ───
-    Route::middleware('role:notaire')->group(function () {
-        Route::post('transactions', [TransactionController::class, 'store']);
-        Route::post('transactions/{dossierTransaction}/assigner-geometre', [TransactionController::class, 'assignerGeometre']);
-        Route::post('transactions/{dossierTransaction}/verifier-identite', [TransactionController::class, 'verifierIdentite']);
-        Route::post('transactions/{dossierTransaction}/valider', [TransactionController::class, 'validerDossier']);
-        Route::post('transactions/{dossierTransaction}/avancer', [TransactionController::class, 'avancerEtape']);
-        Route::post('transactions/{dossierTransaction}/generer-acte', [TransactionController::class, 'genererActeVente']);
-        Route::post('transactions/{dossierTransaction}/inviter', [TransactionController::class, 'inviter']);
-        Route::get('transactions/{dossierTransaction}/intervenants', [TransactionController::class, 'intervenants']);
-        Route::post('transactions/{dossierTransaction}/export-pdf', [TransactionController::class, 'exportPdf']);
+        Route::middleware('role:citoyen')->group(function () {
+            Route::post('missions', [MissionController::class, 'store']);
+        });
 
-        // Factures
-        Route::get('transactions/{dossierTransaction}/factures', [FactureController::class, 'index']);
-        Route::post('transactions/{dossierTransaction}/factures', [FactureController::class, 'store']);
-        Route::get('factures/{facture}', [FactureController::class, 'show']);
-        Route::put('factures/{facture}', [FactureController::class, 'update']);
-        Route::post('factures/{facture}/envoyer', [FactureController::class, 'envoyer']);
-        Route::post('factures/{facture}/payer', [FactureController::class, 'marquerPayee']);
-        Route::get('factures/{facture}/pdf', [FactureController::class, 'telechargerPdf']);
+        Route::middleware('role:geometre')->group(function () {
+            Route::post('missions/{mission}/accepter', [MissionController::class, 'accepter']);
+            Route::post('missions/{mission}/refuser', [MissionController::class, 'refuser']);
+            Route::post('missions/{mission}/rapport', [MissionController::class, 'deposerRapport']);
+        });
 
-        // Suspension / réouverture
-        Route::post('transactions/{dossierTransaction}/suspendre', [TransactionController::class, 'suspendre']);
-        Route::post('transactions/{dossierTransaction}/reouvrir', [TransactionController::class, 'reouvrir']);
+        // ─── Rendez-vous ──
+        Route::middleware('role:notaire,geometre')->group(function () {
+            Route::post('rendez-vous', [RendezVousController::class, 'store']);
+            Route::patch('rendez-vous/{rendezVous}', [RendezVousController::class, 'updateStatut']);
+        });
 
-        // Rendez-vous (notaire peut modifier statut)
-        Route::patch('rendez-vous/{rendezVous}', [RendezVousController::class, 'updateStatut']);
-    });
+        Route::middleware('role:citoyen,notaire,geometre')->group(function () {
+            Route::get('rendez-vous', [RendezVousController::class, 'index']);
+            Route::post('rendez-vous/{rendezVous}/confirmer', [RendezVousController::class, 'confirmer']);
+        });
 
-    // ─── Service géomètre (citoyen → géomètre) ─
-    Route::middleware('role:citoyen,geometre')->group(function () {
-        Route::get('services-geometre', [ServiceGeometreController::class, 'index']);
-        Route::get('services-geometre/{demandeServiceGeometre}', [ServiceGeometreController::class, 'show']);
-    });
-    Route::middleware('role:citoyen')->group(function () {
-        Route::post('services-geometre', [ServiceGeometreController::class, 'store']);
-    });
-    Route::middleware('role:geometre')->group(function () {
-        Route::post('services-geometre/{demandeServiceGeometre}/accepter', [ServiceGeometreController::class, 'accepter']);
-        Route::post('services-geometre/{demandeServiceGeometre}/refuser', [ServiceGeometreController::class, 'refuser']);
-        Route::post('services-geometre/{demandeServiceGeometre}/rapport', [ServiceGeometreController::class, 'deposerRapport']);
-    });
+        // ─── Factures ──
+        Route::middleware('role:notaire,geometre')->group(function () {
+            Route::post('factures', [FactureController::class, 'store']);
+            Route::put('factures/{facture}', [FactureController::class, 'update']);
+            Route::post('factures/{facture}/envoyer', [FactureController::class, 'envoyer']);
+            Route::post('factures/{facture}/payer', [FactureController::class, 'marquerPayee']);
+            Route::get('factures/{facture}/pdf', [FactureController::class, 'telechargerPdf']);
+        });
 
-    // ─── Rendez-vous (parties + notaire) ─
-    Route::middleware('role:citoyen,notaire')->group(function () {
-        Route::post('transactions/{dossierTransaction}/rendez-vous', [RendezVousController::class, 'store']);
-        Route::get('transactions/{dossierTransaction}/rendez-vous', [RendezVousController::class, 'index']);
-        Route::post('rendez-vous/{rendezVous}/confirmer', [RendezVousController::class, 'confirmer']);
-    });
+        Route::middleware('role:citoyen,notaire,geometre')->group(function () {
+            Route::get('factures', [FactureController::class, 'index']);
+            Route::get('factures/{facture}', [FactureController::class, 'show']);
+        });
 
-    // ─── Notation (citoyen note notaire/géomètre après clôture) ─
-    Route::middleware('role:citoyen')->group(function () {
-        Route::post('transactions/{dossierTransaction}/noter', [TransactionController::class, 'noterProfessionnel']);
-    });
+        // ─── Notifications ──
+        Route::get('notifications', [NotificationController::class, 'index']);
+        Route::patch('notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+        Route::get('notifications/non-lues', [NotificationController::class, 'unreadCount']);
 
-    // ─── Geometre (rapport sur assignation) ─
-    Route::middleware('role:geometre')->group(function () {
-        Route::post('transactions/{dossierTransaction}/interventions/{intervention}/rapport', [TransactionController::class, 'rapportGeometre']);
-    });
+        // ─── Avis ──
+        Route::middleware('role:citoyen')->group(function () {
+            Route::post('professionnels/{professionnel}/avis', [ProfessionnelController::class, 'donnerAvis']);
+            Route::get('professionnels/{professionnel}/statistiques', [ProfessionnelController::class, 'statistiques']);
+            Route::put('professionnels/{professionnel}', [ProfessionnelController::class, 'updateProfile']);
+        });
 
-    // ─── Acceptation invitation ──────────
-    Route::post('transactions/{dossierTransaction}/invitations/{intervenant}/accepter', [TransactionController::class, 'accepterInvitation']);
-    Route::post('transactions/{dossierTransaction}/invitations/{intervenant}/refuser', [TransactionController::class, 'refuserInvitation']);
+        // ─── Documents ──
+        Route::get('documents', [DocumentController::class, 'index']);
+        Route::get('documents/{document}/download', [DocumentController::class, 'download']);
+        Route::get('documents/{document}', [DocumentController::class, 'show']);
+        Route::delete('documents/{document}', [DocumentController::class, 'destroy']);
 
-    // ─── Geometre + Notaire ───────────────
-    Route::middleware('role:geometre,notaire')->group(function () {
-        Route::put('professionnels/{professionnel}', [ProfessionnelController::class, 'updateProfile']);
-    });
+        // ─── Messages directs ──
+        Route::get('messages/conversations', [MessageController::class, 'conversations']);
+        Route::get('messages/conversations/{contact}', [MessageController::class, 'conversation']);
+        Route::post('messages', [MessageController::class, 'envoyer']);
 
-    // ─── Support Tickets (tous utilisateurs) ─
-    Route::get('support/tickets', [SupportTicketController::class, 'index']);
-    Route::post('support/tickets', [SupportTicketController::class, 'store']);
-    Route::get('support/tickets/{supportTicket}', [SupportTicketController::class, 'show']);
+        // ─── Support ──
+        Route::get('support/tickets', [SupportTicketController::class, 'index']);
+        Route::post('support/tickets', [SupportTicketController::class, 'store']);
+        Route::get('support/tickets/{supportTicket}', [SupportTicketController::class, 'show']);
 
-    // ─── Support Tickets (admin) ──────────
-    Route::middleware('role:admin')->group(function () {
-        Route::post('support/tickets/{supportTicket}/repondre', [SupportTicketController::class, 'repondre']);
-        Route::patch('support/tickets/{supportTicket}/statut', [SupportTicketController::class, 'updateStatut']);
-    });
+        Route::middleware('role:admin')->group(function () {
+            Route::post('support/tickets/{supportTicket}/repondre', [SupportTicketController::class, 'repondre']);
+            Route::patch('support/tickets/{supportTicket}/statut', [SupportTicketController::class, 'updateStatut']);
+        });
 
-    // ─── Admin ────────────────────────────
-    Route::middleware('role:admin')->group(function () {
-        Route::get('admin/dashboard', [AdminController::class, 'dashboard']);
-        Route::get('admin/users', [AdminController::class, 'users']);
-        Route::patch('admin/users/{user}/toggle-status', [AdminController::class, 'toggleUserStatus']);
-        Route::get('admin/role-requests', [AdminController::class, 'roleRequests']);
-        Route::patch('admin/role-requests/{roleRequest}', [AdminController::class, 'approveRoleRequest']);
+        // ─── Admin ──
+        Route::middleware('role:admin')->group(function () {
+            Route::get('admin/dashboard', [AdminController::class, 'dashboard']);
+            Route::get('admin/users', [AdminController::class, 'users']);
+            Route::post('admin/users', [AdminController::class, 'createUser']);
+            Route::get('admin/users/pending', [AdminController::class, 'pendingUsers']);
+            Route::patch('admin/users/{user}/approve', [AdminController::class, 'approveUser']);
+            Route::patch('admin/users/{user}/toggle-status', [AdminController::class, 'toggleUserStatus']);
+            Route::patch('admin/users/{user}/role', [AdminController::class, 'updateUserRole']);
+            Route::post('admin/professionnels', [AdminController::class, 'createProfessionnel']);
 
-        Route::get('admin/localisation/communes', [LocalisationController::class, 'communes']);
-        Route::post('admin/localisation/communes', [AdminController::class, 'createCommune']);
-        Route::put('admin/localisation/communes/{commune}', [AdminController::class, 'updateCommune']);
-        Route::delete('admin/localisation/communes/{commune}', [AdminController::class, 'deleteCommune']);
-        Route::get('admin/localisation/arrondissements/{commune}', [LocalisationController::class, 'arrondissements']);
-        Route::post('admin/localisation/arrondissements', [AdminController::class, 'createArrondissement']);
-        Route::put('admin/localisation/arrondissements/{arrondissement}', [AdminController::class, 'updateArrondissement']);
-        Route::delete('admin/localisation/arrondissements/{arrondissement}', [AdminController::class, 'deleteArrondissement']);
-        Route::get('admin/localisation/quartiers/{arrondissement}', [LocalisationController::class, 'quartiers']);
-        Route::post('admin/localisation/quartiers', [AdminController::class, 'createQuartier']);
-        Route::put('admin/localisation/quartiers/{quartier}', [AdminController::class, 'updateQuartier']);
-        Route::delete('admin/localisation/quartiers/{quartier}', [AdminController::class, 'deleteQuartier']);
+            Route::get('admin/localisation/communes', [LocalisationController::class, 'communes']);
+            Route::post('admin/localisation/communes', [AdminController::class, 'createCommune']);
+            Route::put('admin/localisation/communes/{commune}', [AdminController::class, 'updateCommune']);
+            Route::delete('admin/localisation/communes/{commune}', [AdminController::class, 'deleteCommune']);
+            Route::get('admin/localisation/arrondissements/{commune}', [LocalisationController::class, 'arrondissements']);
+            Route::post('admin/localisation/arrondissements', [AdminController::class, 'createArrondissement']);
+            Route::put('admin/localisation/arrondissements/{arrondissement}', [AdminController::class, 'updateArrondissement']);
+            Route::delete('admin/localisation/arrondissements/{arrondissement}', [AdminController::class, 'deleteArrondissement']);
+            Route::get('admin/localisation/quartiers/{arrondissement}', [LocalisationController::class, 'quartiers']);
+            Route::post('admin/localisation/quartiers', [AdminController::class, 'createQuartier']);
+            Route::put('admin/localisation/quartiers/{quartier}', [AdminController::class, 'updateQuartier']);
+            Route::delete('admin/localisation/quartiers/{quartier}', [AdminController::class, 'deleteQuartier']);
 
-        Route::get('blockchain', [BlockchainController::class, 'index']);
-        Route::get('blockchain/module/{module}/{referenceId?}', [BlockchainController::class, 'historiqueModule']);
-    });
+            Route::get('blockchain', [BlockchainController::class, 'index']);
+            Route::get('blockchain/module/{module}/{referenceId?}', [BlockchainController::class, 'historiqueModule']);
+        });
+
+    }); // fin account.approved
 });

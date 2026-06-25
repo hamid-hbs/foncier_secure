@@ -7,77 +7,124 @@ import { goBack } from '@/utils/navigation'
 
 const router = useRouter()
 const route = useRoute()
-const form = ref({ parcelle_id: route.query.parcelle_id || '', type: 'vente', message: '' })
-const parcelle = ref(null)
-const parcelles = ref([])
-const errors = ref({})
+const form = ref({ parcelle_id: route.query.parcelle_id || '', type: 'vente', message: '', prix_propose: '' })
+const parcellesLibres = ref([])
 const loading = ref(false)
-const loadingParcelles = ref(true)
-const preselected = computed(() => !!route.query.parcelle_id)
+const error = ref('')
+const errors = ref({})
+const success = ref(false)
+
+const selectedParcelle = computed(() => parcellesLibres.value.find(p => p.id == form.value.parcelle_id))
 
 onMounted(async () => {
   try {
-    if (preselected.value) {
-      const r = await parcelleApi.show(route.query.parcelle_id)
-      parcelle.value = r.data
-    } else {
-      const r = await parcelleApi.list()
-      parcelles.value = r.data?.data ?? []
-    }
-  } catch { }
-  finally { loadingParcelles.value = false }
+    const res = await parcelleApi.list({ statut: 'libre', per_page: 50 })
+    parcellesLibres.value = (res.data.data || []).filter(Boolean)
+  } catch (e) { console.error('Erreur chargement parcelles:', e) }
 })
 
 async function submit() {
   loading.value = true
+  error.value = ''
   errors.value = {}
   try {
-    await demandeAchatApi.create(form.value)
-    router.push('/citoyen/demandes-achat')
+    const payload = { ...form.value }
+    if (payload.prix_propose) payload.prix_propose = parseFloat(payload.prix_propose)
+    await demandeAchatApi.create(payload)
+    success.value = true
+    setTimeout(() => router.push('/citoyen/demandes-achat'), 1500)
   } catch (e) {
-    if (e.response?.status === 422) errors.value = e.response.data?.errors ?? {}
-    else alert(e.response?.data?.message || "Erreur lors de la création")
-  } finally { loading.value = false }
+    if (e.response?.status === 422) {
+      errors.value = e.response.data?.errors || {}
+      error.value = Object.values(errors.value).flat().join(', ')
+    } else {
+      error.value = e.response?.data?.message || 'Erreur lors de la soumission'
+    }
+  } finally {
+    loading.value = false
+  }
 }
 </script>
+
 <template>
-  <div class="page-container">
-    <button @click="goBack(router)" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-      <i class="fas fa-arrow-left"></i> Retour
-    </button>
-    <div class="card p-6 max-w-xl">
-      <h1 class="section-title mb-6">Initier un achat</h1>
-      <form @submit.prevent="submit" class="space-y-4">
-        <div>
-          <label class="form-label">Parcelle</label>
-          <div v-if="preselected && parcelle" class="p-3 rounded-lg text-sm" style="background: var(--bg-page);">
-            <p class="font-medium" style="color: var(--text-primary);">{{ parcelle.titre || parcelle.code || '#' + parcelle.id }}</p>
-            <p class="text-xs mt-1" style="color: var(--text-secondary);">{{ parcelle.commune?.nom || '' }} {{ parcelle.superficie ? '— ' + parcelle.superficie + ' m²' : '' }}</p>
-          </div>
-          <select v-else v-model="form.parcelle_id" class="form-input w-full" :disabled="loadingParcelles">
-            <option value="" disabled>Sélectionner une parcelle</option>
-            <option v-for="p in parcelles" :key="p.id" :value="p.id">{{ p.code || '#' + p.id }} — {{ p.commune?.nom || '' }}</option>
-          </select>
-          <p v-if="errors.parcelle_id" class="text-xs mt-1" style="color: var(--danger);">{{ errors.parcelle_id[0] }}</p>
-        </div>
-        <div>
-          <label class="form-label">Type</label>
-          <select v-model="form.type" class="form-input w-full">
-            <option value="vente">Vente</option>
-            <option value="achat">Achat</option>
-          </select>
-        </div>
-        <div>
-          <label class="form-label">Message (optionnel)</label>
-          <textarea v-model="form.message" class="form-input w-full" rows="4" placeholder="Expliquez votre intérêt pour cette parcelle..."></textarea>
-        </div>
-        <div class="flex gap-3 pt-2">
-          <button type="submit" :disabled="loading" class="btn-green">
-            <i class="fas fa-paper-plane mr-1"></i> {{ loading ? 'Envoi...' : 'Soumettre' }}
-          </button>
-          <button type="button" @click="router.push('/citoyen/demandes-achat')" class="btn-outline">Annuler</button>
-        </div>
-      </form>
+  <div class="page-wrap max-w-2xl mx-auto">
+    <div class="flex items-center gap-3 mb-8">
+      <button @click="goBack(router)" class="btn btn-ghost btn-icon text-stone-500">
+        <i class="fas fa-arrow-left"></i>
+      </button>
+      <div>
+        <h1 class="page-title">Demande d'achat</h1>
+        <p class="page-subtitle">Faites une offre d'acquisition pour une parcelle</p>
+      </div>
     </div>
+
+    <div v-if="success" class="card">
+      <div class="empty-state py-12">
+        <div class="empty-icon bg-success/10 text-success"><i class="fas fa-check-double"></i></div>
+        <p class="empty-title">Demande envoyée !</p>
+        <p class="empty-text">Votre demande d'achat a été soumise. Le propriétaire sera notifié.</p>
+      </div>
+    </div>
+
+    <form v-else @submit.prevent="submit" class="space-y-5">
+      <div v-if="error" class="alert alert-danger">
+        <i class="fas fa-triangle-exclamation shrink-0"></i>
+        <span>{{ error }}</span>
+      </div>
+
+      <div class="card p-6 space-y-5">
+        <!-- Parcelle -->
+        <div>
+          <label class="form-label">Parcelle concernée <span class="text-red-500">*</span></label>
+          <select v-model="form.parcelle_id" class="form-select" :class="errors.parcelle_id ? 'form-input-error' : ''" required>
+            <option value="">Sélectionner une parcelle</option>
+            <option v-for="p in parcellesLibres" :key="p.id" :value="p.id">
+              {{ p.titre || p.code || '#' + p.id }} — {{ p.commune?.nom || '' }}
+            </option>
+          </select>
+          <p v-if="errors.parcelle_id" class="form-error">{{ errors.parcelle_id[0] }}</p>
+        </div>
+
+        <!-- Selected parcelle info -->
+        <div v-if="selectedParcelle" class="flex items-center gap-3 p-3 rounded-xl bg-brand-50 border border-brand-100">
+          <div class="w-9 h-9 rounded-xl bg-brand-100 flex items-center justify-center text-brand shrink-0">
+            <i class="fas fa-map-marker-alt text-sm"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-bold text-stone-900 text-sm truncate">{{ selectedParcelle.titre || 'Parcelle #' + selectedParcelle.id }}</p>
+            <p class="text-xs text-stone-500">{{ [selectedParcelle.commune?.nom, selectedParcelle.arrondissement?.nom].filter(Boolean).join(' · ') }}</p>
+          </div>
+          <div v-if="selectedParcelle.prix_estimatif" class="text-right shrink-0">
+            <p class="text-xs text-stone-400">Prix affiché</p>
+            <p class="font-bold text-brand text-sm">{{ Number(selectedParcelle.prix_estimatif).toLocaleString('fr-FR') }} FCFA</p>
+          </div>
+        </div>
+
+        <!-- Prix proposé -->
+        <div>
+          <label class="form-label">Prix proposé (FCFA)</label>
+          <div class="relative">
+            <i class="fas fa-tag absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-sm pointer-events-none"></i>
+            <input v-model="form.prix_propose" type="number" min="0" step="any" class="form-input pl-10 pr-16" placeholder="Votre offre" />
+            <span class="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-xs font-semibold pointer-events-none">FCFA</span>
+          </div>
+        </div>
+
+        <!-- Message -->
+        <div>
+          <label class="form-label">Message au vendeur</label>
+          <textarea v-model="form.message" rows="4" class="form-input resize-none" placeholder="Présentez-vous et expliquez votre projet d'acquisition…"></textarea>
+        </div>
+      </div>
+
+      <div class="flex gap-3">
+        <button type="submit" class="btn btn-primary btn-lg" :disabled="loading">
+          <div v-if="loading" class="spinner spinner-sm border-white/30 border-t-white"></div>
+          <i v-else class="fas fa-paper-plane"></i>
+          {{ loading ? 'Envoi…' : 'Envoyer la demande' }}
+        </button>
+        <button type="button" @click="goBack(router)" class="btn btn-ghost">Annuler</button>
+      </div>
+    </form>
   </div>
 </template>

@@ -3,67 +3,38 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Commune;
 use App\Models\DossierTransaction;
-use App\Models\Verification;
+use App\Models\Parcelle;
+use App\Models\Mission;
+use App\Models\Professionnel;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
 
 class ObservatoireController extends Controller
 {
     public function index(): JsonResponse
     {
-        $transactionsTotal = DossierTransaction::count();
-        $transactionsEnCours = DossierTransaction::where('statut', '!=', 'cloture')->count();
-        $transactionsCloturees = DossierTransaction::where('statut', 'cloture')->count();
-        $transactionsCeMois = DossierTransaction::whereMonth('created_at', now()->month)
-            ->whereYear('created_at', now()->year)
-            ->count();
+        $parcelles = Parcelle::selectRaw('statut, count(*) as total')->groupBy('statut')->pluck('total', 'statut');
 
-        $verifications = Verification::selectRaw("
-            COUNT(*) as total,
-            SUM(CASE WHEN niveau_risque = 'faible' THEN 1 ELSE 0 END) as faible,
-            SUM(CASE WHEN niveau_risque = 'moyen' THEN 1 ELSE 0 END) as moyen,
-            SUM(CASE WHEN niveau_risque = 'eleve' THEN 1 ELSE 0 END) as eleve
-        ")->first();
-
-        $evolutionMensuelle = collect(range(1, 12))->map(function ($mois) {
-            $transactions = DossierTransaction::whereYear('created_at', now()->year)
-                ->whereMonth('created_at', $mois)
-                ->count();
-            $verifications = Verification::whereYear('created_at', now()->year)
-                ->whereMonth('created_at', $mois)
-                ->count();
-
-            return [
-                'mois' => $mois,
-                'transactions' => $transactions,
-                'verifications' => $verifications,
-            ];
-        });
-
-        $prixMoyen = Commune::withAvg('parcelles as superficie_moyenne', 'superficie')->get()->map(fn($c) => [
-            'commune' => $c->nom,
-            'superficie_moyenne' => (float) ($c->superficie_moyenne ?? 0),
-        ]);
+        $parcellesParCommune = Parcelle::selectRaw('commune_id, count(*) as total')
+            ->whereNotNull('commune_id')
+            ->groupBy('commune_id')
+            ->with('commune:id,nom')
+            ->get()
+            ->pluck('total', 'commune.nom');
 
         return response()->json([
-            'transactions' => [
-                'total' => $transactionsTotal,
-                'en_cours' => $transactionsEnCours,
-                'cloturees' => $transactionsCloturees,
-                'ce_mois' => $transactionsCeMois,
-            ],
-            'verifications' => [
-                'total' => (int) ($verifications->total ?? 0),
-                'faible' => (int) ($verifications->faible ?? 0),
-                'moyen' => (int) ($verifications->moyen ?? 0),
-                'eleve' => (int) ($verifications->eleve ?? 0),
-            ],
-            'evolution_mensuelle' => $evolutionMensuelle,
-            'prix_moyen' => [
-                'par_commune' => $prixMoyen,
-            ],
+            'total_parcelles' => Parcelle::count(),
+            'parcelles_libres' => $parcelles['libre'] ?? 0,
+            'parcelles_vendues' => $parcelles['vendue'] ?? 0,
+            'total_transactions' => DossierTransaction::count(),
+            'total_verifications' => Mission::count(),
+            'total_professionnels' => Professionnel::count(),
+            'total_utilisateurs' => User::count(),
+            'total_geometres' => User::whereHas('role', fn($q) => $q->where('nom', 'geometre'))->count(),
+            'total_notaires' => User::whereHas('role', fn($q) => $q->where('nom', 'notaire'))->count(),
+            'parcelles_par_statut' => $parcelles,
+            'parcelles_par_commune' => $parcellesParCommune,
         ]);
     }
 }

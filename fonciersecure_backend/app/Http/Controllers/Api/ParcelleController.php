@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Analyse;
 use App\Models\Parcelle;
+use App\Models\Propriete;
+use App\Services\AnalyseDocumentaireService;
 use App\Services\BlockchainService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,23 +15,7 @@ class ParcelleController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        if ($token = $request->bearerToken()) {
-            $accessToken = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
-            if ($accessToken) {
-                $user = $accessToken->tokenable;
-                $request->setUserResolver(function () use ($user) {
-                    return $user;
-                });
-            }
-        }
-
-        $user = $request->user();
-
-        $query = Parcelle::with(['proprietaire', 'commune', 'arrondissement', 'quartier']);
-
-        if ($user && $user->role === 'citoyen') {
-            $query->where('proprietaire_id', $user->id);
-        }
+        $query = Parcelle::with(['proprietaireActuel.user', 'commune', 'arrondissement', 'quartier']);
 
         if ($request->filled('statut')) {
             $query->where('statut', $request->statut);
@@ -50,54 +37,21 @@ class ParcelleController extends Controller
         return response()->json($query->latest()->paginate(15));
     }
 
-    public function show(Request $request, Parcelle $parcelle): JsonResponse
+    public function show(Parcelle $parcelle): JsonResponse
     {
-        if ($token = $request->bearerToken()) {
-            $accessToken = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
-            if ($accessToken) {
-                $user = $accessToken->tokenable;
-                $request->setUserResolver(function () use ($user) {
-                    return $user;
-                });
-            }
-        }
-
-        $user = $request->user();
-
-        $parcelle->load([
-            'proprietaire',
-            'commune', 'arrondissement', 'quartier',
-            'verifications.analyses', 'verifications.intervention',
-        ]);
-
-        $documentsVisibles = false;
-        if ($user) {
-            if ($parcelle->proprietaire_id === $user->id || $user->isAdmin()) {
-                $documentsVisibles = true;
-            } else {
-                $verificationActive = $parcelle->verifications()
-                    ->where('demandeur_id', $user->id)
-                    ->exists();
-                if ($verificationActive) {
-                    $documentsVisibles = true;
-                }
-            }
-        }
-
-        if ($documentsVisibles) {
-            $parcelle->load('documents');
-        }
-
-        $data = $parcelle->toArray();
-        $data['documents_visibles'] = $documentsVisibles;
-
-        return response()->json($data);
+        return response()->json(
+            $parcelle->load([
+                'proprietaireActuel.user', 'commune', 'arrondissement', 'quartier',
+                'proprietes.proprietaire', 'documents',
+            ])
+        );
     }
 
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'titre' => 'required|string|max:200',
+            'code' => 'required|string|max:20|unique:parcelles',
+            'titre' => 'nullable|string|max:200',
             'description' => 'nullable|string',
             'commune_id' => 'nullable|exists:communes,id',
             'arrondissement_id' => 'nullable|exists:arrondissements,id',
@@ -108,24 +62,24 @@ class ParcelleController extends Controller
             'prix_estimatif' => 'nullable|numeric|min:0',
         ]);
 
-        $validated['proprietaire_id'] = $request->user()->id;
-
         $parcelle = Parcelle::create($validated);
 
-        app(BlockchainService::class)->log(
-            'parcelle_created',
-            $request->user()->id,
-            'parcelle',
-            $parcelle->id,
-            ['titre' => $parcelle->titre]
-        );
+        Propriete::create([
+            'parcelle_id' => $parcelle->id,
+            'user_id' => $request->user()->id,
+            'date_debut' => now(),
+        ]);
 
-        return response()->json($parcelle->load('proprietaire'), 201);
+        app(BlockchainService::class)->log('parcelle_created', $request->user()->id, 'parcelle', $parcelle->id, ['code' => $parcelle->code_parcelle]);
+        app(AnalyseDocumentaireService::class)->analyser($parcelle);
+
+        return response()->json($parcelle->load('proprietaireActuel.user'), 201);
     }
-
+    
     public function update(Request $request, Parcelle $parcelle): JsonResponse
     {
-        if ($parcelle->proprietaire_id !== $request->user()->id && !$request->user()->isAdmin()) {
+        $proprio = $parcelle->proprietaireActuel;
+        if ($proprio && $proprio->user_id !== $request->user()->id && !$request->user()->isAdmin()) {
             return response()->json(['message' => 'Accès refusé'], 403);
         }
 
@@ -142,79 +96,55 @@ class ParcelleController extends Controller
         ]);
 
         $parcelle->update($validated);
-
-        app(BlockchainService::class)->log(
-            'parcelle_updated',
-            $request->user()->id,
-            'parcelle',
-            $parcelle->id,
-            ['titre' => $parcelle->titre]
-        );
-
-        return response()->json($parcelle->load('proprietaire'));
+        return response()->json($parcelle->load('proprietaireActuel.user'));
     }
 
     public function updateStatut(Request $request, Parcelle $parcelle): JsonResponse
     {
-        $user = $request->user();
-        if ($user->role !== 'admin' && $parcelle->proprietaire_id !== $user->id) {
-            return response()->json(['message' => 'Accès refusé'], 403);
-        }
-
-        $validated = $request->validate([
-            'statut' => 'required|in:libre,en_verification,en_transaction,vendue',
-        ]);
-
+        $validated = $request->validate(['statut' => 'required|in:libre,en_demande,en_transaction,vendue']);
         $parcelle->update(['statut' => $validated['statut']]);
-
-        app(BlockchainService::class)->log(
-            'parcelle_statut_' . $validated['statut'],
-            $user->id,
-            'parcelle',
-            $parcelle->id,
-            ['ancien_statut' => $parcelle->getOriginal('statut')]
-        );
-
         return response()->json($parcelle);
     }
 
     public function uploadDocument(Request $request, Parcelle $parcelle): JsonResponse
     {
-        if ($parcelle->proprietaire_id !== $request->user()->id) {
+        $proprio = $parcelle->proprietaireActuel;
+        if (!$proprio || $proprio->user_id !== $request->user()->id) {
             return response()->json(['message' => 'Accès refusé'], 403);
         }
 
         $validated = $request->validate([
-            'type_document' => 'required|in:tf,adc,plan_topo,certificat_admin,photo,autre',
-            'fichier' => 'required|file|mimes:pdf,jpg,jpeg,png|max:20480',
+            'type_document' => 'required|string|max:50',
+            'fichier' => 'required|file|max:20480',
         ]);
 
         $file = $request->file('fichier');
-        $content = file_get_contents($file->getRealPath());
-        $hash = hash('sha256', $content);
-        $path = 'parcelles/' . $parcelle->id . '/' . uniqid() . '.' . $file->extension();
+        $path = $file->store('documents/parcelles/' . $parcelle->id);
 
-        $parcelle->documents()->create([
+        $document = $parcelle->documents()->create([
             'type_document' => $validated['type_document'],
             'nom_fichier' => $file->getClientOriginalName(),
             'chemin_fichier' => $path,
-            'hash_sha256' => $hash,
+            'hash_sha256' => hash_file('sha256', $file->getRealPath()),
             'taille' => $file->getSize(),
+            'uploader_id' => $request->user()->id,
             'uploaded_at' => now(),
         ]);
 
-        return response()->json($parcelle->load('documents'), 201);
+        app(AnalyseDocumentaireService::class)->analyser($parcelle, [$document->id]);
+
+        return response()->json($document, 201);
     }
 
     public function deleteDocument(Request $request, Parcelle $parcelle, $documentId): JsonResponse
     {
-        if ($parcelle->proprietaire_id !== $request->user()->id) {
-            return response()->json(['message' => 'Accès refusé'], 403);
-        }
-
         $document = $parcelle->documents()->findOrFail($documentId);
         $document->delete();
-
         return response()->json(null, 204);
+    }
+
+    public function historique(Parcelle $parcelle): JsonResponse
+    {
+        return response()->json($parcelle->proprietes()->with('proprietaire')->orderBy('date_debut', 'desc')->get());
     }
 }

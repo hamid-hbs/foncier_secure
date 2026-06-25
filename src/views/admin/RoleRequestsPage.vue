@@ -2,99 +2,107 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import adminApi from '@/api/admin'
-import { goBack } from '@/utils/navigation'
+
+function getRoleCode(role) {
+  return typeof role === 'object' ? role?.code : role
+}
 
 const router = useRouter()
-const requests = ref([])
+const pendingUsers = ref([])
 const loading = ref(true)
 const processingId = ref(null)
 
-onMounted(fetchRequests)
-
-async function fetchRequests() {
-  loading.value = true
+onMounted(async () => {
   try {
-    const res = await adminApi.getRoleRequests()
-    const data = res.data?.data || res.data || []
-    requests.value = (Array.isArray(data) ? data : []).filter(Boolean)
-  } catch { /* ignore */ }
+    const res = await adminApi.getPendingUsers()
+    pendingUsers.value = (res.data.data || []).filter(Boolean)
+  } catch (e) { console.error('Erreur chargement utilisateurs en attente:', e) }
   loading.value = false
-}
+})
 
 async function approve(id) {
   processingId.value = id
   try {
-    await adminApi.approveRoleRequest(id, { action: 'valide' })
-    await fetchRequests()
-  } catch { alert('Erreur lors de la validation') }
+    await adminApi.approveUser(id)
+    pendingUsers.value = pendingUsers.value.filter(u => u.id !== id)
+  } catch (e) { console.error('Erreur approbation:', e) }
   processingId.value = null
 }
 
 async function reject(id) {
+  if (!confirm('Désactiver cet utilisateur ?')) return
   processingId.value = id
   try {
-    await adminApi.approveRoleRequest(id, { action: 'rejete' })
-    await fetchRequests()
-  } catch { alert('Erreur lors du rejet') }
+    await adminApi.toggleUserStatus(id)
+    pendingUsers.value = pendingUsers.value.filter(u => u.id !== id)
+  } catch (e) { console.error('Erreur désactivation:', e) }
   processingId.value = null
 }
 </script>
 
 <template>
-  <div class="page-container">
-    <button @click="goBack(router)" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-      <i class="fas fa-arrow-left"></i> Retour
-    </button>
-    <div class="flex items-center gap-3 mb-8">
-      <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--gold); opacity: 0.15;">
-        <i class="fas fa-clipboard-list" style="color: var(--gold);"></i>
-      </div>
+  <div class="page-wrap">
+    <div class="flex items-center justify-between gap-4 mb-8">
       <div>
-        <h1 class="section-title">Demandes de changement de rôle</h1>
-        <p class="section-subtitle">Validez ou rejetez les demandes des professionnels</p>
+        <h1 class="page-title">Utilisateurs en attente</h1>
+        <p class="page-subtitle">Approuvez ou refusez les nouveaux comptes utilisateurs</p>
+      </div>
+      <span v-if="pendingUsers.length > 0" class="badge badge-warning text-sm py-1.5 px-3">{{ pendingUsers.length }} en attente</span>
+    </div>
+
+    <div v-if="loading" class="space-y-3">
+      <div v-for="i in 4" :key="i" class="skeleton h-24 rounded-2xl"></div>
+    </div>
+
+    <div v-else-if="pendingUsers.length === 0" class="card">
+      <div class="empty-state">
+        <div class="empty-icon"><i class="fas fa-clipboard-check"></i></div>
+        <p class="empty-title">Aucun utilisateur en attente</p>
+        <p class="empty-text">Tous les comptes ont été vérifiés.</p>
       </div>
     </div>
 
-    <div v-if="loading" class="flex-center py-16">
-      <div class="w-8 h-8 border-2 rounded-full animate-spin" style="border-color: var(--green-tree); border-top-color: transparent;"></div>
-    </div>
-
-    <div v-else-if="requests.length === 0" class="card text-center py-12">
-      <i class="fas fa-clipboard-list mb-3" style="font-size: 2.5rem; color: var(--text-secondary); opacity: 0.5;"></i>
-      <p style="color: var(--text-secondary);">Aucune demande en attente.</p>
-    </div>
-
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-5">
-      <div v-for="r in requests" :key="r.id" class="card" style="transition: box-shadow 0.2s;" @mouseenter="$event.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)'" @mouseleave="$event.currentTarget.style.boxShadow = ''">
-        <div class="flex items-start gap-3 mb-4">
-          <div class="flex-center shrink-0" style="width: 40px; height: 40px; border-radius: 50%; background: var(--gold); opacity: 0.2; color: var(--gold);">
-            <i class="fas fa-user"></i>
+    <div v-else class="space-y-4">
+      <div v-for="user in pendingUsers" :key="user.id" class="card">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-5">
+          <!-- Avatar -->
+          <div class="flex items-center gap-3">
+            <div class="avatar bg-brand shrink-0">{{ (user.prenom || 'U')[0] }}{{ (user.nom || '')[0] }}</div>
+            <div>
+              <p class="font-display font-bold text-stone-900">{{ user.prenom }} {{ user.nom }}</p>
+              <p class="text-sm text-stone-400">{{ user.email }}</p>
+            </div>
           </div>
-          <div class="flex-1">
-            <h3 class="font-semibold" style="color: var(--text-primary);">{{ r.user?.nom }} {{ r.user?.prenom }}</h3>
-            <p style="color: var(--text-secondary); font-size: 0.875rem;">{{ r.user?.email }}</p>
+
+          <!-- Info -->
+          <div class="flex-1 sm:px-5">
+            <div class="flex flex-wrap items-center gap-3 mb-2">
+              <span class="badge badge-neutral">{{ getRoleCode(user.role) || 'citoyen' }}</span>
+            </div>
+            <p class="text-xs text-stone-400 mt-1">
+              <i class="fas fa-calendar mr-1"></i>{{ user.created_at ? new Date(user.created_at).toLocaleDateString('fr-FR') : '' }}
+            </p>
           </div>
-          <span class="badge" :class="r.statut === 'en_attente' ? 'badge-warning' : r.statut === 'valide' ? 'badge-success' : 'badge-danger'">{{ r.statut }}</span>
-        </div>
 
-        <div class="p-3 rounded-lg mb-4" style="background: var(--bg-page);">
-          <p class="text-sm" style="color: var(--text-secondary);">Rôle demandé :</p>
-          <p class="font-medium text-sm" style="color: var(--text-primary);">{{ r.role_demande }}</p>
-        </div>
-
-        <div v-if="r.document_justificatif" class="mb-4">
-          <a :href="r.document_justificatif" target="_blank" class="flex items-center gap-2 text-sm font-medium" style="color: var(--green-tree);">
-            <i class="fas fa-file-lines"></i> Voir le justificatif
-          </a>
-        </div>
-
-        <div v-if="r.statut === 'en_attente'" class="flex gap-2">
-          <button @click="approve(r.id)" :disabled="processingId === r.id" class="btn-green btn-sm flex items-center gap-1.5">
-            <i class="fas fa-circle-check"></i> {{ processingId === r.id ? '...' : 'Valider' }}
-          </button>
-          <button @click="reject(r.id)" :disabled="processingId === r.id" class="btn-danger btn-sm flex items-center gap-1.5">
-            <i class="fas fa-circle-xmark"></i> {{ processingId === r.id ? '...' : 'Rejeter' }}
-          </button>
+          <!-- Actions -->
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              @click="approve(user.id)"
+              class="btn btn-success btn-sm"
+              :disabled="processingId === user.id"
+            >
+              <div v-if="processingId === user.id" class="spinner spinner-sm border-white/30 border-t-white"></div>
+              <i v-else class="fas fa-check"></i>
+              Approuver
+            </button>
+            <button
+              @click="reject(user.id)"
+              class="btn btn-ghost btn-sm text-danger hover:bg-danger/10"
+              :disabled="processingId === user.id"
+            >
+              <i class="fas fa-times"></i> Refuser
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,78 +1,103 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import verificationApi from '@/api/verification'
-import { goBack } from '@/utils/navigation'
 
 const router = useRouter()
 const missions = ref([])
 const loading = ref(true)
+const filter = ref('all')
+
+const filteredMissions = computed(() => {
+  if (filter.value === 'all') return missions.value
+  if (filter.value === 'en_cours') return missions.value.filter(m => ['soumise', 'en_analyse', 'mission_assignee'].includes(m.statut))
+  if (filter.value === 'terminee') return missions.value.filter(m => ['terminee', 'validee'].includes(m.statut))
+  return missions.value
+})
 
 onMounted(async () => {
   try {
-    const res = await verificationApi.getMissions()
-    const data = res.data?.data || res.data || []
-    missions.value = (Array.isArray(data) ? data : []).filter(Boolean)
-  } catch { /* ignore */ }
+    const res = await verificationApi.list()
+    missions.value = (res.data.data || res.data || []).filter(Boolean)
+  } catch (e) { console.error('Erreur chargement missions:', e) }
   loading.value = false
 })
 
+function statutBadgeClass(s) {
+  const map = { soumise: 'badge-neutral', acceptee: 'badge-success', refusee: 'badge-danger', terminee: 'badge-success' }
+  return map[s] || 'badge-neutral'
+}
 function statutLabel(s) {
-  const map = { sollicite: 'Sollicité', en_cours: 'En cours', termine: 'Terminé', terminee: 'Terminée' }
+  const map = { soumise: 'Soumise', acceptee: 'Acceptée', refusee: 'Refusée', terminee: 'Terminée' }
   return map[s] || s
 }
 
-function peutDeposerRapport(statut) {
-  return statut === 'sollicite' || statut === 'en_cours'
+function canSubmitRapport(m) {
+  return ['acceptee'].includes(m.statut)
 }
 </script>
 
 <template>
-  <div class="page-container">
-    <button @click="goBack(router)" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-      <i class="fas fa-arrow-left"></i> Retour
-    </button>
-    <div class="flex items-center gap-3 mb-8">
-      <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--bg-page); color: var(--green-tree);">
-        <i class="fas fa-map"></i>
-      </div>
+  <div class="page-wrap">
+    <div class="flex items-center justify-between gap-4 mb-8">
       <div>
-        <h1 class="section-title">Mes missions terrain</h1>
-        <p class="section-subtitle">Missions de vérification qui vous sont assignées</p>
+        <h1 class="page-title">Mes missions</h1>
+        <p class="page-subtitle">Toutes vos missions de vérification foncière</p>
       </div>
     </div>
 
-    <div v-if="loading" class="flex-center py-16">
-      <div class="spinner"></div>
+    <div class="tabs mb-6">
+      <button class="tab" :class="filter === 'all' ? 'active' : ''" @click="filter = 'all'">Toutes ({{ missions.length }})</button>
+      <button class="tab" :class="filter === 'en_cours' ? 'active' : ''" @click="filter = 'en_cours'">
+        En cours ({{ missions.filter(m => ['soumise','en_analyse','mission_assignee'].includes(m.statut)).length }})
+      </button>
+      <button class="tab" :class="filter === 'terminee' ? 'active' : ''" @click="filter = 'terminee'">
+        Terminées ({{ missions.filter(m => ['terminee','validee'].includes(m.statut)).length }})
+      </button>
     </div>
 
-    <div v-else-if="missions.length === 0" class="card text-center py-12">
-      <i class="fas fa-map" style="font-size: 48px; color: var(--border); margin-bottom: 16px;"></i>
-      <p style="color: var(--text-secondary);">Aucune mission assignée.</p>
+    <div v-if="loading" class="space-y-3">
+      <div v-for="i in 5" :key="i" class="skeleton h-24 rounded-2xl"></div>
     </div>
 
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-5">
-      <div v-for="m in missions" :key="m.id" class="card">
-        <div class="flex items-start justify-between mb-4">
-          <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: var(--bg-page); color: var(--green-tree);">
-            <i class="fas fa-clipboard-list"></i>
+    <div v-else-if="filteredMissions.length === 0" class="card">
+      <div class="empty-state">
+        <div class="empty-icon"><i class="fas fa-map-location-dot"></i></div>
+        <p class="empty-title">Aucune mission</p>
+        <p class="empty-text">Vous n'avez pas encore de mission dans cette catégorie.</p>
+      </div>
+    </div>
+
+    <div v-else class="space-y-3">
+      <div v-for="m in filteredMissions" :key="m.id"
+        class="card group hover:border-brand-100 hover:shadow-md transition-all"
+      >
+        <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-brand-50 flex items-center justify-center text-brand shrink-0 group-hover:bg-brand group-hover:text-white transition-colors">
+            <i class="fas fa-ruler-combined text-sm"></i>
           </div>
-          <span class="badge" :class="'badge-' + (m.statut || 'sollicite')">{{ statutLabel(m.statut) }}</span>
-        </div>
-        <h3 class="font-semibold mb-1" style="color: var(--text-primary);">{{ m.verification?.titre || m.titre || 'Mission #' + m.id }}</h3>
-        <p v-if="m.verification?.parcelle" class="text-sm mb-2" style="color: var(--text-secondary);">
-          <i class="fas fa-map-pin"></i> {{ m.verification.parcelle.code || m.verification.parcelle.nom || 'Parcelle #' + m.verification.parcelle.id }}
-        </p>
-        <p v-if="m.verification?.parcelle?.commune" class="text-xs mb-4" style="color: var(--text-secondary);">
-          <i class="fas fa-location-dot"></i> {{ m.verification.parcelle.commune }}
-        </p>
-        <div class="flex gap-2">
-          <router-link :to="`/geometre/verifications/${m.verification?.id || m.id}`" class="btn-outline btn-sm flex items-center gap-1.5">
-            <i class="fas fa-eye"></i> Voir détails
-          </router-link>
-          <router-link v-if="peutDeposerRapport(m.statut)" :to="`/geometre/verifications/${m.verification?.id || m.id}/rapport`" class="btn-green btn-sm flex items-center gap-1.5">
-            <i class="fas fa-upload"></i> Déposer rapport
-          </router-link>
+          <div class="flex-1 min-w-0">
+            <div class="flex flex-wrap items-center gap-2 mb-1">
+              <p class="font-display font-bold text-stone-900">
+                {{ m.parcelle?.titre || m.parcelle?.code || 'Parcelle #' + (m.parcelle_id || m.id) }}
+              </p>
+              <span class="badge" :class="statutBadgeClass(m.statut)">{{ statutLabel(m.statut) }}</span>
+            </div>
+            <div class="flex flex-wrap gap-x-5 gap-y-1 text-sm text-stone-400">
+              <span v-if="m.parcelle?.commune"><i class="fas fa-location-dot mr-1.5 text-stone-300"></i>{{ m.parcelle.commune?.nom }}</span>
+              <span><i class="fas fa-calendar mr-1.5 text-stone-300"></i>{{ m.created_at ? new Date(m.created_at).toLocaleDateString('fr-FR') : '—' }}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <router-link v-if="canSubmitRapport(m)" :to="{ name: 'DepotRapport', params: { id: m.id } }"
+              class="btn btn-primary btn-sm" @click.stop>
+              <i class="fas fa-file-pen"></i> Soumettre rapport
+            </router-link>
+            <router-link v-else :to="{ name: 'DepotRapport', params: { id: m.id } }"
+              class="btn btn-ghost btn-sm" @click.stop>
+              <i class="fas fa-eye"></i> Voir
+            </router-link>
+          </div>
         </div>
       </div>
     </div>

@@ -2,7 +2,6 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import parcelleApi from '@/api/parcelle'
-import { goBack } from '@/utils/navigation'
 
 const router = useRouter()
 
@@ -24,101 +23,121 @@ function getPhotoUrl(p) {
 onMounted(async () => {
   try {
     const res = await parcelleApi.list()
-    parcelles.value = (res.data?.data || res.data || []).filter(Boolean)
-  } catch { /* ignore */ }
+    parcelles.value = (res.data.data || []).filter(Boolean)
+  } catch (e) { console.error('Erreur chargement parcelles:', e) }
   loading.value = false
 })
 
-function statutClass(statut) {
+function statutBadgeClass(statut) {
   const map = {
     libre: 'badge-success',
     en_demande: 'badge-warning',
     en_transaction: 'badge-info',
-    vendue: 'badge-info',
+    vendue: 'badge-neutral',
     conteste: 'badge-danger',
+    en_verification: 'badge-info',
+    sollicite: 'badge-purple',
   }
-  return map[statut] || 'badge-success'
+  return map[statut] || 'badge-neutral'
 }
 </script>
 
 <template>
-  <div class="page-container">
-    <button @click="goBack(router)" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-      <i class="fas fa-arrow-left"></i> Retour
-    </button>
-
-    <div class="flex-between mb-8">
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: #D1FAE5;">
-          <i class="fas fa-map-pin" style="color: var(--green-tree);"></i>
-        </div>
-        <div>
-          <h1 class="section-title">Mes parcelles</h1>
-          <p class="section-subtitle">Gérez vos parcelles enregistrées</p>
-        </div>
+  <div class="page-wrap">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div>
+        <h1 class="page-title">Mon patrimoine foncier</h1>
+        <p class="page-subtitle">Gérez et consultez vos parcelles sécurisées</p>
       </div>
-      <router-link :to="{ name: 'CreerParcelle' }" class="btn-green flex items-center gap-2">
-        <i class="fas fa-plus"></i> Nouvelle parcelle
+      <router-link :to="{ name: 'CreerParcelle' }" class="btn btn-primary">
+        <i class="fas fa-plus"></i> Déclarer une parcelle
       </router-link>
     </div>
 
-    <div v-if="loading" class="flex-center py-16">
-      <div class="w-8 h-8 border-2 rounded-full animate-spin" style="border-color: var(--border); border-top-color: var(--green-tree);"></div>
+    <!-- Loading -->
+    <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div v-for="i in 6" :key="i" class="skeleton h-72 rounded-2xl"></div>
     </div>
 
-    <div v-else-if="parcelles.length === 0" class="card text-center py-12">
-      <i class="fas fa-map-pin text-4xl mb-3" style="color: var(--border);"></i>
-      <p class="mb-4" style="color: var(--text-secondary);">Vous n'avez aucune parcelle enregistrée.</p>
-      <router-link :to="{ name: 'CreerParcelle' }" class="btn-green">Déclarer une parcelle</router-link>
+    <!-- Empty -->
+    <div v-else-if="parcelles.length === 0" class="card">
+      <div class="empty-state">
+        <div class="empty-icon"><i class="fas fa-map"></i></div>
+        <p class="empty-title">Aucune parcelle enregistrée</p>
+        <p class="empty-text">Sécurisez votre patrimoine en déclarant vos parcelles sur la plateforme.</p>
+        <router-link :to="{ name: 'CreerParcelle' }" class="btn btn-primary mt-4">
+          <i class="fas fa-plus"></i> Déclarer ma première parcelle
+        </router-link>
+      </div>
     </div>
 
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <!-- Grid -->
+    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
       <div
         v-for="p in parcelles"
         :key="p.id"
-        class="card p-0 overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200"
-        style="border-radius: 14px;"
         @click="router.push({ name: 'CitoyenParcelleDetail', params: { id: p.id } })"
+        class="bg-white rounded-2xl border border-stone-100 overflow-hidden cursor-pointer hover:border-brand-100 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group flex flex-col"
       >
-        <!-- Vignette image ou placeholder -->
-        <div class="relative w-full overflow-hidden" style="height: 160px;">
+        <!-- Image -->
+        <div class="relative w-full h-44 overflow-hidden bg-stone-100 shrink-0">
           <img
             v-if="getPhotoUrl(p)"
             :src="getPhotoUrl(p)"
             :alt="p.titre || 'Photo parcelle'"
-            class="w-full h-full object-cover"
-            style="display: block;"
+            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
-          <div
-            v-else
-            class="w-full h-full flex flex-col items-center justify-center gap-2"
-            style="background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);"
-          >
-            <i class="fas fa-image" style="font-size: 2.5rem; color: #34D399; opacity: 0.7;"></i>
-            <span class="text-xs font-medium" style="color: #059669;">Aucune photo</span>
+          <div v-else class="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-brand-50 to-brand-100/50">
+            <i class="fas fa-map-marked-alt text-4xl text-brand-200"></i>
+            <span class="text-[10px] font-bold uppercase tracking-widest text-brand-300">Sans aperçu</span>
           </div>
-          <!-- Badge statut superposé -->
-          <span
-            class="badge absolute top-3 right-3"
-            :class="statutClass(p.statut)"
-            style="font-size: 0.7rem; box-shadow: 0 1px 4px rgba(0,0,0,0.15);"
-          >{{ p.statut }}</span>
+          <div class="absolute inset-0 bg-gradient-to-t from-stone-900/60 via-transparent to-transparent"></div>
+
+          <!-- Badge statut -->
+          <span class="badge absolute top-3 right-3 backdrop-blur-sm shadow-sm" :class="statutBadgeClass(p.statut)">
+            {{ (p.statut || '').replace('_', ' ') }}
+          </span>
+
+          <!-- Bottom info overlay -->
+          <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+            <span class="font-mono text-xs font-semibold text-white bg-black/40 backdrop-blur-sm px-2 py-1 rounded-lg">
+              {{ p.code || '#' + p.id }}
+            </span>
+            <span v-if="p.superficie" class="text-xs font-bold text-white/90 drop-shadow flex items-center gap-1">
+              <i class="fas fa-ruler-combined text-white/60 text-[10px]"></i> {{ p.superficie }} m²
+            </span>
+          </div>
         </div>
 
-        <!-- Contenu de la card -->
-        <div class="p-4">
-          <div class="flex items-center gap-2 mb-2">
-            <i class="fas fa-map-pin" style="color: var(--green-tree);"></i>
-            <span class="font-semibold truncate" style="color: var(--text-primary);">{{ p.titre || 'Parcelle #' + p.id }}</span>
+        <!-- Content -->
+        <div class="p-4 flex-1 flex flex-col">
+          <h3 class="font-display font-bold text-stone-900 mb-2 group-hover:text-brand transition-colors line-clamp-1">
+            {{ p.titre || 'Parcelle non nommée' }}
+          </h3>
+
+          <div class="space-y-1.5 mb-4 flex-1">
+            <div class="flex items-start gap-2.5 text-sm text-stone-500">
+              <i class="fas fa-location-dot mt-0.5 text-stone-300 w-3.5 shrink-0 text-center text-xs"></i>
+              <span class="truncate-2 text-xs">
+                {{ p.commune?.nom || 'Localisation inconnue' }}
+                <template v-if="p.arrondissement"> · {{ p.arrondissement.nom }}</template>
+                <template v-if="p.quartier"> · {{ p.quartier.nom }}</template>
+              </span>
+            </div>
+            <div v-if="p.prix_estimatif" class="flex items-center gap-2.5 text-sm">
+              <i class="fas fa-tag text-gold w-3.5 shrink-0 text-center text-xs"></i>
+              <span class="font-semibold text-stone-900 text-xs">{{ Number(p.prix_estimatif).toLocaleString('fr-FR') }} FCFA</span>
+            </div>
           </div>
-          <div class="text-sm mb-1" style="color: var(--text-secondary);">
-            <i class="fas fa-ruler-combined mr-1"></i> {{ p.superficie ? p.superficie + ' m²' : '—' }}
-          </div>
-          <div class="text-sm" style="color: var(--text-secondary);">
-            <i class="fas fa-map-marker-alt mr-1"></i>
-            {{ p.commune?.nom || '—' }}
-            <template v-if="p.arrondissement"> — {{ p.arrondissement.nom }}</template>
-            <template v-if="p.quartier"> / {{ p.quartier.nom }}</template>
+
+          <div class="pt-3 border-t border-stone-100 flex items-center justify-between text-xs">
+            <span class="text-stone-400">
+              <i class="fas fa-file-contract mr-1"></i>{{ p.documents?.length || 0 }} doc(s)
+            </span>
+            <span class="text-brand font-bold group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+              Voir détails <i class="fas fa-arrow-right text-[10px]"></i>
+            </span>
           </div>
         </div>
       </div>

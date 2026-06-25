@@ -2,7 +2,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { goBack } from '@/utils/navigation'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -25,10 +24,10 @@ onMounted(() => {
 const trustScore = computed(() => auth.user?.indice_confiance || 0)
 
 const trustLevel = computed(() => {
-  if (trustScore.value >= 80) return { label: 'Excellence', bar: 'var(--green-tree)' }
-  if (trustScore.value >= 50) return { label: 'Confirmé', bar: '#457B9D' }
-  if (trustScore.value >= 20) return { label: 'En construction', bar: 'var(--gold)' }
-  return { label: 'Nouveau', bar: '#D1D5DB' }
+  if (trustScore.value >= 80) return { label: 'Excellence', color: 'var(--success)' }
+  if (trustScore.value >= 50) return { label: 'Confirmé', color: 'var(--brand)' }
+  if (trustScore.value >= 20) return { label: 'En construction', color: 'var(--gold)' }
+  return { label: 'Nouveau', color: 'var(--text-3)' }
 })
 
 async function save() {
@@ -50,15 +49,6 @@ async function save() {
   }
 }
 
-async function handleRequestRole(role) {
-  try {
-    await auth.requestRole({ role })
-    alert('Demande de changement de rôle envoyée avec succès')
-  } catch {
-    alert('Erreur lors de la demande')
-  }
-}
-
 function startEditing() {
   form.value = {
     nom: auth.user?.nom || '',
@@ -67,134 +57,158 @@ function startEditing() {
   }
   editing.value = true
 }
+
+const roleLabel = computed(() => {
+  const r = auth.userRole
+  if (r === 'citoyen') return 'Citoyen'
+  if (r === 'notaire') return 'Notaire'
+  if (r === 'geometre') return 'Géomètre'
+  if (r === 'admin') return 'Administrateur'
+  return r
+})
 </script>
 
 <template>
-  <div class="page-container max-w-2xl">
-    <button @click="goBack(router)" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-      <i class="fas fa-arrow-left"></i> Retour
-    </button>
-
-    <div class="flex items-center gap-3 mb-8">
-      <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: var(--bg-page); color: var(--green-tree);">
-        <i class="fas fa-user"></i>
-      </div>
-      <div>
-        <h1 class="section-title">Mon profil</h1>
-        <p class="section-subtitle">Gérez vos informations personnelles</p>
+  <div class="page-wrap max-w-2xl mx-auto">
+    <!-- Pending approval banner -->
+    <div v-if="auth.pendingApproval" class="alert alert-warning mb-6 !border-gold !bg-gold/10">
+      <div class="flex items-start gap-3 w-full">
+        <i class="fas fa-hourglass-half text-gold shrink-0 mt-0.5"></i>
+        <div class="flex-1">
+          <p class="font-bold text-stone-900">Compte en attente de validation</p>
+          <p class="text-sm text-stone-600 mt-0.5">Votre compte est en attente d'approbation par un administrateur. Vous pourrez utiliser toutes les fonctionnalités dès que votre compte sera activé.</p>
+        </div>
       </div>
     </div>
 
-    <div v-if="error" class="p-3.5 rounded-lg text-sm mb-4" style="background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA;">{{ error }}</div>
+    <div class="flex items-center justify-between gap-4 mb-8">
+      <div>
+        <h1 class="page-title">Mon profil</h1>
+        <p class="page-subtitle">Gérez vos informations personnelles</p>
+      </div>
+    </div>
 
-    <div class="card mb-6">
-      <div class="flex items-center gap-5 mb-6 pb-6" style="border-bottom: 1px solid var(--border);">
-        <div class="w-16 h-16 rounded-xl flex items-center justify-center text-white font-bold text-2xl" style="background: var(--green-tree);">
-          {{ (auth.user?.nom || '?')[0] }}{{ (auth.user?.prenom || '?')[0] }}
+    <div v-if="error" class="alert alert-danger mb-6">
+      <i class="fas fa-triangle-exclamation shrink-0"></i>
+      <span>{{ error }}</span>
+    </div>
+
+    <div class="card mb-5">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-5 pb-6 mb-6 border-b border-stone-100">
+        <div class="w-20 h-20 rounded-2xl bg-brand flex items-center justify-center font-display font-extrabold text-white text-2xl shrink-0 shadow-brand">
+          {{ (auth.user?.prenom || '?')[0] }}{{ (auth.user?.nom || '?')[0] }}
         </div>
-        <div>
-          <h2 class="text-xl font-bold" style="color: var(--text-primary);">{{ auth.user?.prenom }} {{ auth.user?.nom }}</h2>
-          <span class="badge mt-1" style="background: #F0F7F4; color: var(--green-tree);">{{ auth.user?.role || 'Citoyen' }}</span>
+        <div class="flex-1">
+          <h2 class="font-display font-bold text-2xl text-stone-900">{{ auth.user?.prenom }} {{ auth.user?.nom }}</h2>
+          <span class="badge badge-info mt-1">{{ roleLabel }}</span>
+          <p class="text-sm text-stone-400 mt-1">{{ auth.user?.email }}</p>
         </div>
-        <button v-if="!editing" @click="startEditing" class="btn-outline btn-sm flex items-center gap-2 ml-auto">
+        <button v-if="!editing" @click="startEditing" class="btn btn-outline btn-sm self-start sm:self-auto">
           <i class="fas fa-pen"></i> Modifier
         </button>
       </div>
 
-      <div v-if="!editing" class="space-y-4">
-        <div class="flex items-center gap-3 py-3 px-4 rounded-lg" style="background: var(--bg-page);">
-          <i class="fas fa-envelope" style="color: var(--text-secondary);"></i>
+      <div v-if="!editing" class="space-y-3">
+        <div class="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-stone-50">
+          <i class="fas fa-envelope w-5 text-center text-stone-400 shrink-0"></i>
           <div>
-            <p class="text-sm" style="color: var(--text-secondary);">Email</p>
-            <p class="text-sm font-medium" style="color: var(--text-primary);">{{ auth.user?.email }}</p>
+            <p class="text-xs text-stone-400 font-medium">Email</p>
+            <p class="text-sm font-semibold text-stone-900">{{ auth.user?.email }}</p>
           </div>
         </div>
-        <div class="flex items-center gap-3 py-3 px-4 rounded-lg" style="background: var(--bg-page);">
-          <i class="fas fa-phone" style="color: var(--text-secondary);"></i>
+        <div class="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-stone-50">
+          <i class="fas fa-phone w-5 text-center text-stone-400 shrink-0"></i>
           <div>
-            <p class="text-sm" style="color: var(--text-secondary);">Téléphone</p>
-            <p class="text-sm font-medium" style="color: var(--text-primary);">{{ auth.user?.telephone || '-' }}</p>
+            <p class="text-xs text-stone-400 font-medium">Téléphone</p>
+            <p class="text-sm font-semibold text-stone-900">{{ auth.user?.telephone || '—' }}</p>
           </div>
         </div>
-        <div class="p-4 rounded-lg" style="background: #F0F7F4;">
+
+        <div class="px-4 py-4 rounded-xl bg-brand-50 border border-brand-100">
           <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-2">
-              <i class="fas fa-shield-alt" style="color: var(--green-tree);"></i>
-              <span class="text-sm font-semibold" style="color: var(--green-tree);">Indice de confiance</span>
+              <i class="fas fa-shield-halved text-brand text-sm"></i>
+              <span class="text-sm font-bold text-brand">Indice de confiance</span>
             </div>
-            <span class="text-xs font-medium" style="color: var(--text-secondary);">{{ trustLevel.label }}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-bold text-stone-900">{{ trustScore }}/100</span>
+              <span class="badge badge-info">{{ trustLevel.label }}</span>
+            </div>
           </div>
-          <div class="w-full h-2.5 rounded-full overflow-hidden" style="background: rgba(255,255,255,0.6);">
-            <div class="h-full rounded-full transition-all duration-500" :style="{ width: trustScore + '%', background: trustLevel.bar }"></div>
-          </div>
-          <div class="flex justify-between mt-1.5">
-            <span class="text-xs" style="color: var(--text-secondary);">0</span>
-            <span class="text-sm font-bold" style="color: var(--green-tree);">{{ trustScore }}/100</span>
-            <span class="text-xs" style="color: var(--text-secondary);">100</span>
+          <div class="w-full h-2 rounded-full bg-white overflow-hidden">
+            <div class="h-full rounded-full transition-all duration-700" :style="{ width: trustScore + '%', background: trustLevel.color }"></div>
           </div>
         </div>
       </div>
 
-      <div v-else class="space-y-4">
-        <div class="grid grid-cols-2 gap-4">
+      <form v-else @submit.prevent="save" class="space-y-4">
+        <div class="form-row">
           <div>
             <label class="form-label">Nom</label>
-            <input v-model="form.nom" class="form-input" :class="{ 'border-red-500': errors.nom }" />
-            <p v-if="errors.nom" class="text-xs mt-1" style="color: #DC2626;">{{ errors.nom[0] }}</p>
+            <input v-model="form.nom" type="text" class="form-input" :class="errors.nom ? 'form-input-error' : ''" required />
+            <p v-if="errors.nom" class="form-error">{{ errors.nom[0] }}</p>
           </div>
           <div>
             <label class="form-label">Prénom</label>
-            <input v-model="form.prenom" class="form-input" :class="{ 'border-red-500': errors.prenom }" />
-            <p v-if="errors.prenom" class="text-xs mt-1" style="color: #DC2626;">{{ errors.prenom[0] }}</p>
+            <input v-model="form.prenom" type="text" class="form-input" :class="errors.prenom ? 'form-input-error' : ''" required />
+            <p v-if="errors.prenom" class="form-error">{{ errors.prenom[0] }}</p>
           </div>
         </div>
         <div>
           <label class="form-label">Téléphone</label>
-          <input v-model="form.telephone" type="tel" class="form-input" :class="{ 'border-red-500': errors.telephone }" />
-          <p v-if="errors.telephone" class="text-xs mt-1" style="color: #DC2626;">{{ errors.telephone[0] }}</p>
+          <div class="relative">
+            <i class="fas fa-phone absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-sm pointer-events-none"></i>
+            <input v-model="form.telephone" type="tel" class="form-input pl-10" :class="errors.telephone ? 'form-input-error' : ''" />
+          </div>
+          <p v-if="errors.telephone" class="form-error">{{ errors.telephone[0] }}</p>
         </div>
-        <div class="flex gap-3">
-          <button @click="save" class="btn-green flex items-center gap-2" :disabled="loading">
-            <i class="fas fa-floppy-disk"></i> {{ loading ? 'Sauvegarde...' : 'Enregistrer' }}
+        <div class="flex gap-3 pt-2">
+          <button type="submit" class="btn btn-primary" :disabled="loading">
+            <div v-if="loading" class="spinner spinner-sm border-white/30 border-t-white"></div>
+            <i v-else class="fas fa-floppy-disk"></i>
+            {{ loading ? 'Enregistrement…' : 'Enregistrer' }}
           </button>
-          <button @click="editing = false" class="btn-outline flex items-center gap-2">
+          <button type="button" @click="editing = false" class="btn btn-ghost">
             <i class="fas fa-times"></i> Annuler
           </button>
         </div>
-      </div>
+      </form>
     </div>
 
-    <div v-if="auth.user?.type === 'professionnel' && auth.user?.professionnel" class="card mb-6">
-      <h3 class="font-semibold mb-4" style="color: var(--text-primary);">Informations professionnelles</h3>
-      <div class="space-y-3">
-        <div class="flex items-center gap-3 py-2" style="border-bottom: 1px solid var(--border);">
-          <span class="text-sm font-medium" style="color: var(--text-secondary); min-width: 120px;">Type</span>
-          <span style="color: var(--text-primary);">{{ auth.user.professionnel.type }}</span>
+    <div class="card mb-5">
+      <h3 class="font-display font-bold text-stone-900 mb-4">
+        <i class="fas fa-briefcase text-stone-400 mr-2"></i>
+        Informations professionnelles
+      </h3>
+      <div v-if="auth.user?.professionnel" class="space-y-3">
+        <div class="flex items-center gap-3 py-2.5 border-b border-stone-100">
+          <span class="text-sm font-semibold text-stone-500 min-w-[120px]">Type</span>
+          <span class="text-sm text-stone-900 font-medium capitalize">{{ auth.user.professionnel.type }}</span>
         </div>
-        <div v-if="auth.user.professionnel.cabinet" class="flex items-center gap-3 py-2" style="border-bottom: 1px solid var(--border);">
-          <span class="text-sm font-medium" style="color: var(--text-secondary); min-width: 120px;">Cabinet</span>
-          <span style="color: var(--text-primary);">{{ auth.user.professionnel.cabinet }}</span>
+        <div v-if="auth.user.professionnel.cabinet" class="flex items-center gap-3 py-2.5 border-b border-stone-100">
+          <span class="text-sm font-semibold text-stone-500 min-w-[120px]">Cabinet</span>
+          <span class="text-sm text-stone-900 font-medium">{{ auth.user.professionnel.cabinet }}</span>
         </div>
-        <div v-if="auth.user.professionnel.zone_intervention" class="flex items-center gap-3 py-2" style="border-bottom: 1px solid var(--border);">
-          <span class="text-sm font-medium" style="color: var(--text-secondary); min-width: 120px;">Zone</span>
-          <span style="color: var(--text-primary);">{{ auth.user.professionnel.zone_intervention }}</span>
+        <div v-if="auth.user.professionnel.numero_agrement" class="flex items-center gap-3 py-2.5 border-b border-stone-100">
+          <span class="text-sm font-semibold text-stone-500 min-w-[120px]">N° d'agrément</span>
+          <span class="text-sm text-stone-900 font-medium">{{ auth.user.professionnel.numero_agrement }}</span>
         </div>
-        <div v-if="auth.user.professionnel.specialites?.length" class="flex items-center gap-3 py-2">
-          <span class="text-sm font-medium" style="color: var(--text-secondary); min-width: 120px;">Spécialités</span>
-          <div class="flex flex-wrap gap-1">
+        <div v-if="auth.user.professionnel.zone_intervention" class="flex items-center gap-3 py-2.5 border-b border-stone-100">
+          <span class="text-sm font-semibold text-stone-500 min-w-[120px]">Zone</span>
+          <span class="text-sm text-stone-900 font-medium">{{ auth.user.professionnel.zone_intervention }}</span>
+        </div>
+        <div v-if="auth.user.professionnel.specialites?.length" class="flex items-start gap-3 py-2.5">
+          <span class="text-sm font-semibold text-stone-500 min-w-[120px]">Spécialités</span>
+          <div class="flex flex-wrap gap-1.5">
             <span v-for="s in auth.user.professionnel.specialites" :key="s" class="badge badge-info">{{ s }}</span>
           </div>
         </div>
       </div>
-    </div>
-
-    <div v-if="auth.user?.role === 'citoyen'" class="card">
-      <h3 class="font-semibold mb-4" style="color: var(--text-primary);">Demander un changement de rôle</h3>
-      <p class="text-sm mb-5" style="color: var(--text-secondary);">Si vous êtes un professionnel, vous pouvez demander à changer de rôle.</p>
-      <div class="flex flex-wrap gap-3">
-        <button @click="handleRequestRole('geometre')" class="btn-outline btn-sm">Devenir géomètre</button>
-        <button @click="handleRequestRole('notaire')" class="btn-outline btn-sm">Devenir notaire</button>
+      <div v-else-if="auth.userRole === 'notaire' || auth.userRole === 'geometre'" class="flex items-center gap-3 p-4 rounded-xl bg-stone-50">
+        <i class="fas fa-clock text-stone-400 shrink-0"></i>
+        <p class="text-sm text-stone-500">Votre profil professionnel sera configuré par un administrateur après validation de votre compte.</p>
       </div>
+      <div v-else class="text-sm text-stone-400">Aucune information professionnelle.</div>
     </div>
   </div>
 </template>

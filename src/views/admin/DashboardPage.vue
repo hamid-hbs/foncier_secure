@@ -3,149 +3,148 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import adminApi from '@/api/admin'
 
+function getRoleCode(role) {
+  return typeof role === 'object' ? role?.code : role
+}
+
 const router = useRouter()
 const stats = ref({
   total_users: 0,
   total_citoyens: 0,
   pending_tickets: 0,
-  total_geometres: 0,
-  total_notaires: 0,
+  total_parcelles: 0,
   pending_role_requests: 0,
-  recent_users: [],
+  total_transactions: 0,
 })
+const recentUsers = ref([])
 const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const res = await adminApi.dashboard()
-    stats.value = res.data?.data || res.data || stats.value
-  } catch { /* ignore */ }
+    const [statsRes, usersRes] = await Promise.all([
+      adminApi.dashboard ? adminApi.dashboard() : Promise.resolve({ data: {} }),
+      adminApi.getUsers ? adminApi.getUsers({ page: 1, per_page: 5 }) : Promise.resolve({ data: [] }),
+    ])
+    const s = statsRes.data?.data || statsRes.data || {}
+    Object.assign(stats.value, s)
+    recentUsers.value = (usersRes.data?.data || usersRes.data || []).slice(0, 5)
+  } catch (e) { console.error('Erreur chargement dashboard:', e) }
   loading.value = false
 })
+
+const statCards = [
+  { key: 'total_users', label: 'Utilisateurs', icon: 'fa-users', color: 'bg-brand/10 text-brand', to: '/admin/users' },
+  { key: 'total_citoyens', label: 'Citoyens', icon: 'fa-person', color: 'bg-sky-100 text-sky-600', to: '/admin/users' },
+  { key: 'total_parcelles', label: 'Parcelles', icon: 'fa-map', color: 'bg-gold/10 text-gold-dark', to: '/admin/localisation' },
+  { key: 'total_transactions', label: 'Transactions', icon: 'fa-arrows-left-right', color: 'bg-success/10 text-success', to: '/admin/blockchain' },
+  { key: 'pending_role_requests', label: 'Demandes de rôle', icon: 'fa-clipboard-list', color: 'bg-warn/10 text-warn', to: '/admin/role-requests' },
+  { key: 'pending_tickets', label: 'Tickets ouverts', icon: 'fa-headset', color: 'bg-danger/10 text-danger', to: '/admin/support/tickets' },
+]
 </script>
 
 <template>
-  <div class="page-container">
-    <button @click="router.push('/mon-profil')" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-      <i class="fas fa-arrow-left"></i> Retour
-    </button>
-    <div class="flex items-center justify-between mb-8">
+  <div class="page-wrap">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
       <div>
-        <h1 class="section-title">Administration</h1>
-        <p class="section-subtitle">Tableau de bord administrateur</p>
+        <h1 class="page-title">Administration</h1>
+        <p class="page-subtitle">Vue d'ensemble de la plateforme FoncierSecure</p>
       </div>
-      <div class="flex items-center gap-2 text-sm" style="color: var(--text-secondary);">
-        <i class="fas fa-clock"></i>
+      <div class="flex items-center gap-2 text-sm text-stone-500 bg-white border border-stone-200 px-4 py-2 rounded-xl shadow-xs">
+        <i class="fas fa-calendar text-brand"></i>
         {{ new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) }}
       </div>
     </div>
 
-    <div v-if="loading" class="flex-center py-16">
-      <div class="w-8 h-8 border-2 rounded-full animate-spin" style="border-color: var(--green-tree); border-top-color: transparent;"></div>
+    <!-- Loading -->
+    <div v-if="loading" class="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+      <div v-for="i in 6" :key="i" class="skeleton h-24 rounded-2xl"></div>
     </div>
 
     <template v-else>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
-        <div class="stats-card">
-          <div class="flex items-start justify-between mb-3">
-            <div class="w-11 h-11 rounded-lg flex items-center justify-center" style="background: var(--info); opacity: 0.15;">
-              <i class="fas fa-users" style="color: var(--info);"></i>
+      <!-- Stat Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+        <router-link
+          v-for="c in statCards"
+          :key="c.key"
+          :to="c.to"
+          class="card group hover:border-brand-100 hover:shadow-md transition-all cursor-pointer"
+        >
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="stat-label">{{ c.label }}</p>
+              <p class="stat-value mt-2">{{ stats[c.key] ?? 0 }}</p>
             </div>
-            <i class="fas fa-chart-line" style="color: var(--success);"></i>
-          </div>
-          <div class="stat-value">{{ stats.total_users }}</div>
-          <div class="stat-label">Utilisateurs</div>
-        </div>
-        <div class="stats-card">
-          <div class="flex items-start justify-between mb-3">
-            <div class="w-11 h-11 rounded-lg flex items-center justify-center" style="background: var(--success); opacity: 0.15;">
-              <i class="fas fa-user-check" style="color: var(--success);"></i>
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center transition-all group-hover:scale-110" :class="c.color">
+              <i :class="['fas', c.icon]"></i>
             </div>
-            <i class="fas fa-chart-line" style="color: var(--success);"></i>
           </div>
-          <div class="stat-value">{{ stats.total_citoyens }}</div>
-          <div class="stat-label">Citoyens</div>
-        </div>
-        <router-link to="/admin/support/tickets" class="stats-card" style="cursor: pointer;">
-          <div class="flex items-start justify-between mb-3">
-            <div class="w-11 h-11 rounded-lg flex items-center justify-center" style="background: var(--gold); opacity: 0.15;">
-              <i class="fas fa-ticket" style="color: var(--gold);"></i>
-            </div>
-            <i class="fas fa-arrow-right" style="color: var(--gold);"></i>
-          </div>
-          <div class="stat-value">{{ stats.pending_tickets || 0 }}</div>
-          <div class="stat-label">Tickets support</div>
-        </router-link>
-        <div class="stats-card">
-          <div class="flex items-start justify-between mb-3">
-            <div class="w-11 h-11 rounded-lg flex items-center justify-center" style="background: var(--green-tree); opacity: 0.15;">
-              <i class="fas fa-draw-polygon" style="color: var(--green-tree);"></i>
-            </div>
-            <i class="fas fa-chart-line" style="color: var(--success);"></i>
-          </div>
-          <div class="stat-value">{{ stats.total_geometres }}</div>
-          <div class="stat-label">Géomètres</div>
-        </div>
-        <div class="stats-card">
-          <div class="flex items-start justify-between mb-3">
-            <div class="w-11 h-11 rounded-lg flex items-center justify-center" style="background: var(--text-primary); opacity: 0.1;">
-              <i class="fas fa-file-signature" style="color: var(--text-primary);"></i>
-            </div>
-            <i class="fas fa-chart-line" style="color: var(--success);"></i>
-          </div>
-          <div class="stat-value">{{ stats.total_notaires }}</div>
-          <div class="stat-label">Notaires</div>
-        </div>
-        <router-link to="/admin/role-requests" class="stats-card" style="cursor: pointer;">
-          <div class="flex items-start justify-between mb-3">
-            <div class="w-11 h-11 rounded-lg flex items-center justify-center" style="background: var(--danger); opacity: 0.15;">
-              <i class="fas fa-clipboard-list" style="color: var(--danger);"></i>
-            </div>
-            <i class="fas fa-arrow-right" style="color: var(--danger);"></i>
-          </div>
-          <div class="stat-value">{{ stats.pending_role_requests }}</div>
-          <div class="stat-label">Demandes de rôle</div>
         </router-link>
       </div>
 
-      <div v-if="stats.recent_users?.length" class="card mb-6">
-        <h3 class="section-title mb-4" style="font-size: 1rem;">
-          <i class="fas fa-user-plus" style="color: var(--green-tree);"></i> Utilisateurs récents
-        </h3>
-        <div class="table-wrap">
-          <table class="w-full">
-            <thead>
-              <tr>
-                <th class="table-header">Nom</th>
-                <th class="table-header">Email</th>
-                <th class="table-header">Rôle</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y" style="border-color: var(--border);">
-              <tr v-for="u in stats.recent_users" :key="u.id">
-                <td class="table-cell font-medium" style="color: var(--text-primary);">{{ u.nom }} {{ u.prenom }}</td>
-                <td class="table-cell">{{ u.email }}</td>
-                <td class="table-cell"><span class="badge" :class="u.role === 'admin' ? 'badge-danger' : u.role === 'geometre' ? 'badge-info' : u.role === 'notaire' ? 'badge-info' : 'badge-success'">{{ u.role }}</span></td>
-              </tr>
-            </tbody>
-          </table>
+      <!-- Content -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Recent users -->
+        <div class="lg:col-span-2 card">
+          <div class="flex items-center justify-between mb-5">
+            <h3 class="font-display font-bold text-stone-900">Utilisateurs récents</h3>
+            <router-link to="/admin/users" class="text-xs font-bold text-brand hover:text-brand-light transition-colors">Gérer les utilisateurs <i class="fas fa-arrow-right ml-1 text-[10px]"></i></router-link>
+          </div>
+          <div v-if="recentUsers.length === 0" class="empty-state py-10">
+            <div class="empty-icon"><i class="fas fa-users"></i></div>
+            <p class="empty-title">Aucun utilisateur récent</p>
+          </div>
+          <div v-else class="space-y-1">
+            <div v-for="u in recentUsers" :key="u.id"
+              @click="router.push('/admin/users')"
+              class="flex items-center gap-3 p-3 rounded-xl hover:bg-stone-50 cursor-pointer transition-colors">
+              <div class="avatar avatar-sm bg-brand shrink-0">{{ (u.prenom || 'U')[0] }}{{ (u.nom || '')[0] }}</div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-stone-900">{{ u.prenom }} {{ u.nom }}</p>
+                <p class="text-xs text-stone-400">{{ u.email }}</p>
+              </div>
+              <span class="badge badge-info capitalize">{{ getRoleCode(u.role) }}</span>
+              <span v-if="!u.is_active" class="badge badge-danger">Inactif</span>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="card">
-        <h3 class="section-title mb-4" style="font-size: 1rem;">
-          <i class="fas fa-bolt" style="color: var(--green-tree);"></i> Liens rapides
-        </h3>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <router-link to="/admin/users" class="flex-center gap-2 p-4 rounded-lg font-medium text-sm" style="background: var(--bg-page); color: var(--green-tree); transition: opacity 0.15s;" @mouseenter="$event.currentTarget.style.opacity = '0.8'" @mouseleave="$event.currentTarget.style.opacity = '1'">
-            <i class="fas fa-users"></i> Gérer les utilisateurs
-          </router-link>
-          <router-link to="/admin/role-requests" class="flex-center gap-2 p-4 rounded-lg font-medium text-sm" style="background: var(--bg-page); color: var(--gold); transition: opacity 0.15s;" @mouseenter="$event.currentTarget.style.opacity = '0.8'" @mouseleave="$event.currentTarget.style.opacity = '1'">
-            <i class="fas fa-clipboard-list"></i> Demandes de rôle
-          </router-link>
-          <router-link to="/admin/blockchain" class="flex-center gap-2 p-4 rounded-lg font-medium text-sm" style="background: var(--bg-page); color: var(--info); transition: opacity 0.15s;" @mouseenter="$event.currentTarget.style.opacity = '0.8'" @mouseleave="$event.currentTarget.style.opacity = '1'">
-            <i class="fas fa-shield-alt"></i> Registre blockchain
-          </router-link>
+        <!-- Quick actions -->
+        <div class="space-y-4">
+          <div class="card bg-brand-dark text-white relative overflow-hidden">
+            <div class="absolute -right-4 -top-4 text-white/5 pointer-events-none">
+              <i class="fas fa-gear text-[100px]"></i>
+            </div>
+            <h3 class="font-display font-bold mb-4 relative z-10">Actions rapides</h3>
+            <div class="space-y-2 relative z-10">
+              <router-link to="/admin/users/new" class="flex items-center gap-3 p-3 rounded-xl bg-brand hover:bg-brand-light transition-colors">
+                <div class="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0"><i class="fas fa-user-plus text-sm"></i></div>
+                <span class="font-semibold text-sm">Créer un utilisateur</span>
+              </router-link>
+              <router-link to="/admin/role-requests" class="flex items-center gap-3 p-3 rounded-xl bg-white/8 hover:bg-white/15 transition-colors">
+                <div class="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0"><i class="fas fa-clipboard-check text-sm"></i></div>
+                <span class="font-semibold text-sm">Demandes de rôle</span>
+                <span v-if="stats.pending_role_requests > 0" class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500 text-white">{{ stats.pending_role_requests }}</span>
+              </router-link>
+              <router-link to="/admin/blockchain" class="flex items-center gap-3 p-3 rounded-xl bg-white/8 hover:bg-white/15 transition-colors">
+                <div class="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center shrink-0"><i class="fas fa-link text-sm"></i></div>
+                <span class="font-semibold text-sm">Explorer blockchain</span>
+              </router-link>
+            </div>
+          </div>
+
+          <div v-if="stats.pending_tickets > 0" class="card border border-warn/30 bg-warn/5">
+            <div class="flex items-start gap-3">
+              <div class="w-9 h-9 rounded-xl bg-warn/10 flex items-center justify-center text-warn shrink-0">
+                <i class="fas fa-triangle-exclamation"></i>
+              </div>
+              <div>
+                <p class="font-bold text-stone-900 text-sm">Tickets en attente</p>
+                <p class="text-xs text-stone-500 mt-0.5">{{ stats.pending_tickets }} ticket(s) nécessitent votre attention.</p>
+                <router-link to="/admin/support/tickets" class="text-xs font-bold text-brand mt-2 block">Traiter maintenant →</router-link>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </template>

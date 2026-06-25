@@ -2,30 +2,21 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import authApi from '@/api/auth'
-import { goBack } from '@/utils/navigation'
 
 const router = useRouter()
 const email = ref('')
 const loading = ref(false)
 const error = ref('')
-const errors = ref({})
-const success = ref('')
+const success = ref(false)
 
-async function sendOtp() {
-  error.value = ''
-  errors.value = {}
-  success.value = ''
+async function handleSubmit() {
   loading.value = true
+  error.value = ''
   try {
-    const res = await authApi.sendOtp(email.value)
-    success.value = res.data?.message || 'OTP envoyé à ' + email.value
+    await authApi.sendOtp(email.value)
+    success.value = true
   } catch (e) {
-    if (e.response?.status === 422) {
-      errors.value = e.response.data?.errors || {}
-      error.value = Object.values(errors.value).flat().join(', ')
-    } else {
-      error.value = e.response?.data?.message || "Erreur lors de l'envoi du code"
-    }
+    error.value = e.response?.data?.message || 'Une erreur est survenue'
   } finally {
     loading.value = false
   }
@@ -33,52 +24,59 @@ async function sendOtp() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center px-4" style="background: var(--bg-page);">
-    <div class="w-full max-w-md">
-      <button @click="goBack(router)" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-        <i class="fas fa-arrow-left"></i> Retour
-      </button>
-      <div class="text-center mb-8">
-        <router-link to="/" class="inline-flex items-center gap-2.5">
-          <div class="w-10 h-10 flex items-center justify-center rounded-xl" style="background: var(--green-tree);">
-            <span class="text-white font-bold text-lg">FS</span>
+  <div class="min-h-screen flex items-center justify-center p-6" style="background: var(--bg);">
+    <div class="w-full max-w-md animate-slide-up">
+      <!-- Card -->
+      <div class="bg-white rounded-2xl border border-stone-200 shadow-lg p-8">
+        <!-- Logo -->
+        <div class="flex items-center gap-2.5 mb-8">
+          <div class="w-9 h-9 rounded-xl bg-brand flex items-center justify-center">
+            <span class="font-display font-extrabold text-white text-sm">FS</span>
           </div>
-          <span class="text-xl font-bold" style="color: var(--text-primary);">Foncier<span style="color: var(--green-tree);">Secure</span></span>
-        </router-link>
-      </div>
-      <div class="card">
-        <div class="flex items-center gap-3 mb-6">
-          <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: #F0F7F4; color: var(--green-tree);">
-            <i class="fas fa-key"></i>
+          <span class="font-display font-extrabold text-stone-900 text-xl">Foncier<span class="text-brand">Secure</span></span>
+        </div>
+
+        <div class="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center mb-6">
+          <i class="fas fa-envelope-open-text text-brand text-xl"></i>
+        </div>
+
+        <h1 class="font-display font-extrabold text-2xl text-stone-900 mb-2">Mot de passe oublié ?</h1>
+        <p class="text-stone-500 text-sm mb-7 leading-relaxed">Saisissez votre email et nous vous enverrons un code de réinitialisation.</p>
+
+        <div v-if="success" class="alert alert-success mb-6">
+          <i class="fas fa-check-circle shrink-0"></i>
+          <span>Un email de réinitialisation a été envoyé. Vérifiez votre boîte mail.</span>
+        </div>
+
+        <form v-else @submit.prevent="handleSubmit" class="space-y-5">
+          <div v-if="error" class="alert alert-danger">
+            <i class="fas fa-triangle-exclamation shrink-0"></i>
+            <span>{{ error }}</span>
           </div>
           <div>
-            <h1 class="text-xl font-bold" style="color: var(--text-primary);">Mot de passe oublié</h1>
-            <p class="text-sm" style="color: var(--text-secondary);">Recevez un code OTP par email</p>
-          </div>
-        </div>
-        <div v-if="error" class="p-3.5 rounded-lg text-sm mb-5" style="background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA;">{{ error }}</div>
-        <div v-if="success" class="p-3.5 rounded-lg text-sm mb-5" style="background: #D1FAE5; color: #065F46; border: 1px solid #A7F3D0;">{{ success }}</div>
-        <form @submit.prevent="sendOtp">
-          <div class="mb-5">
-            <label class="form-label">Email</label>
+            <label class="form-label">Adresse email</label>
             <div class="relative">
-              <i class="fas fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2" style="color: var(--text-secondary);"></i>
-              <input v-model="email" type="email" class="form-input pl-10" :class="{ 'border-red-500': errors.email }" placeholder="vous@email.com" required />
+              <i class="fas fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 text-sm pointer-events-none"></i>
+              <input v-model="email" type="email" class="form-input pl-10" placeholder="vous@email.com" required />
             </div>
-            <p v-if="errors.email" class="text-xs mt-1" style="color: #DC2626;">{{ errors.email[0] }}</p>
           </div>
-          <button type="submit" class="btn-green w-full" :disabled="loading">
-            <i class="fas fa-paper-plane"></i> {{ loading ? 'Envoi...' : 'Envoyer le code OTP' }}
+          <button type="submit" class="btn btn-primary btn-full btn-lg" :disabled="loading">
+            <div v-if="loading" class="spinner spinner-sm border-white/30 border-t-white"></div>
+            <i v-else class="fas fa-paper-plane"></i>
+            {{ loading ? 'Envoi…' : 'Envoyer le code' }}
           </button>
         </form>
-        <div class="mt-6 text-center">
-          <router-link to="/auth/login" class="inline-flex items-center gap-1.5 text-sm font-medium" style="color: var(--green-tree);">
-            <i class="fas fa-arrow-left"></i> Retour à la connexion
-          </router-link>
-          <span class="mx-2" style="color: var(--text-secondary);">|</span>
-          <router-link to="/auth/reset-password" class="inline-flex items-center gap-1.5 text-sm font-medium" style="color: var(--green-tree);">
-            J'ai déjà un code
-          </router-link>
+
+        <div class="mt-6 text-center space-y-2">
+          <p class="text-sm text-stone-500">
+            <router-link to="/auth/login" class="font-bold text-brand hover:text-brand-light transition-colors flex items-center justify-center gap-2">
+              <i class="fas fa-arrow-left text-xs"></i> Retour à la connexion
+            </router-link>
+          </p>
+          <p class="text-sm text-stone-500">
+            Vous avez un code ?
+            <router-link to="/auth/reset-password" class="font-bold text-brand hover:text-brand-light transition-colors">Réinitialiser</router-link>
+          </p>
         </div>
       </div>
     </div>

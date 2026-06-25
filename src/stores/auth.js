@@ -11,7 +11,14 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref(null)
   const loading = ref(false)
 
+  const pendingApproval = computed(() => !!user.value && !user.value.is_active)
+
   const isAuthenticated = computed(() => !!token.value)
+
+  const userRole = computed(() => {
+    if (!user.value) return null
+    return typeof user.value.role === 'object' ? user.value.role?.code : user.value.role
+  })
 
   function setBearer(tokenValue) {
     token.value = tokenValue
@@ -32,7 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchCsrfCookie() {
     try {
       await axios.get('/sanctum/csrf-cookie', { baseURL: csrfBaseURL, withCredentials: true })
-    } catch { /* CSRF not available in dev — safe to ignore */ }
+    } catch { /* CSRF not available in dev */ }
   }
 
   async function tryAutoLogin() {
@@ -41,7 +48,7 @@ export const useAuthStore = defineStore('auth', () => {
     setBearer(saved)
     try {
       const res = await authApi.me()
-      user.value = res.data.user || res.data
+      user.value = res.data
     } catch {
       clearAuth()
     }
@@ -55,7 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
       const t = res.data.token
       localStorage.setItem('auth_token', t)
       setBearer(t)
-      user.value = res.data.user || res.data
+      user.value = res.data.user
       return res
     } finally {
       loading.value = false
@@ -70,7 +77,7 @@ export const useAuthStore = defineStore('auth', () => {
       const t = res.data.token
       localStorage.setItem('auth_token', t)
       setBearer(t)
-      user.value = res.data.user || res.data
+      user.value = res.data.user
       return res
     } finally {
       loading.value = false
@@ -80,7 +87,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchProfile() {
     try {
       const res = await authApi.me()
-      user.value = res.data.user || res.data
+      user.value = res.data
     } catch {
       clearAuth()
     }
@@ -93,16 +100,21 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function updateProfile(data) {
     const res = await authApi.updateProfile(data)
-    user.value = res.data.user || res.data
+    user.value = res.data
     return res
   }
 
-  async function requestRole(data) {
-    return await authApi.requestRole(data)
+  async function fetchDashboard() {
+    return await authApi.dashboard()
+  }
+
+  async function deleteAccount() {
+    await authApi.deleteAccount()
+    clearAuth()
   }
 
   return {
-    user, token, loading, isAuthenticated,
-    fetchCsrfCookie, tryAutoLogin, login, register, fetchProfile, logout, updateProfile, requestRole, clearAuth,
+    user, token, loading, pendingApproval, isAuthenticated, userRole,
+    fetchCsrfCookie, tryAutoLogin, login, register, fetchProfile, logout, updateProfile, fetchDashboard, deleteAccount, clearAuth,
   }
 })

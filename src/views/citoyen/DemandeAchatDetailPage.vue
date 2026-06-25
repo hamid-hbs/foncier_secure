@@ -11,154 +11,118 @@ const route = useRoute()
 const auth = useAuthStore()
 const demande = ref(null)
 const loading = ref(true)
-const actionLoading = ref(false)
-const notaires = ref([])
-const selectedNotaire = ref('')
-const messages = ref([])
-const messageText = ref('')
-const sending = ref(false)
+const processing = ref(false)
 
-const isVendeur = computed(() => auth.user?.id === demande.value?.parcelle?.proprietaire_id)
-const isNotaire = computed(() => auth.user?.role === 'notaire')
-
-const statutLabel = { soumise: 'Soumise', acceptee: 'Acceptée', refusee: 'Refusée', annulee: 'Annulée' }
-const badgeClass = { soumise: 'badge-warning', acceptee: 'badge-success', refusee: 'badge-danger', annulee: 'badge-secondary' }
+const isVendeur = computed(() => auth.user?.id === demande.value?.vendeur_id || auth.user?.id === demande.value?.vendeur?.id)
 
 onMounted(async () => {
   try {
-    const r = await demandeAchatApi.show(route.params.id)
-    demande.value = r.data?.data ?? r.data
-    const nr = await professionnelApi.list({ type: 'notaire' })
-    notaires.value = nr.data?.data ?? []
-    const mr = await demandeAchatApi.messages(route.params.id)
-    messages.value = mr.data?.data ?? mr.data ?? []
-  } catch (e) {
-    console.error(e)
-  } finally {
-    loading.value = false
-  }
+    const res = await demandeAchatApi.show(route.params.id)
+    demande.value = res.data || null
+  } catch (e) { console.error('Erreur chargement demande:', e) }
+  loading.value = false
 })
 
-async function envoyerMessage() {
-  if (!messageText.value.trim()) return
-  sending.value = true
-  try {
-    await demandeAchatApi.envoyerMessage(route.params.id, { contenu: messageText.value })
-    messageText.value = ''
-    const mr = await demandeAchatApi.messages(route.params.id)
-    messages.value = mr.data?.data ?? mr.data ?? []
-  } catch (e) {
-    alert(e.response?.data?.message || "Erreur")
-  }
-  sending.value = false
+function statutBadge(s) {
+  const map = { en_attente: 'badge-warning', acceptee: 'badge-success', refusee: 'badge-danger' }
+  return map[s] || 'badge-neutral'
 }
 
-async function notaireRepondre(action) {
-  if (!confirm(`Confirmer ${action === 'accepter' ? "l'acceptation" : 'le refus'} de cette demande ?`)) return
-  actionLoading.value = true
+async function accept() {
+  processing.value = true
   try {
-    if (action === 'accepter') {
-      await demandeAchatApi.accepterDemande(route.params.id)
-    } else {
-      await demandeAchatApi.refuserDemande(route.params.id)
-    }
-    const r = await demandeAchatApi.show(route.params.id)
-    demande.value = r.data?.data ?? r.data
-  } catch (e) {
-    alert(e.response?.data?.message || "Erreur")
-  }
-  actionLoading.value = false
+    await demandeAchatApi.accepter(route.params.id)
+    demande.value.statut = 'acceptee'
+  } catch (e) { console.error('Erreur acceptation demande:', e) }
+  processing.value = false
 }
 
-async function repondre(statut) {
-  if (!confirm(`Confirmer la réponse "${statutLabel[statut]}" ?`)) return
-  if (statut === 'acceptee' && !selectedNotaire.value) {
-    alert('Veuillez sélectionner un notaire.')
-    return
-  }
-  actionLoading.value = true
+async function reject() {
+  if (!confirm('Refuser cette demande ?')) return
+  processing.value = true
   try {
-    await demandeAchatApi.repondre(route.params.id, { statut, notaire_id: selectedNotaire.value || undefined })
-    router.push('/citoyen/demandes-achat')
-  } catch (e) {
-    alert(e.response?.data?.message || "Erreur")
-  } finally {
-    actionLoading.value = false
-  }
+    await demandeAchatApi.refuser(route.params.id)
+    demande.value.statut = 'refusee'
+  } catch (e) { console.error('Erreur refus demande:', e) }
+  processing.value = false
 }
 </script>
-<template>
-  <div class="page-container">
-    <button @click="goBack(router)" class="flex items-center gap-2 text-sm mb-4" style="color: var(--green-tree);">
-      <i class="fas fa-arrow-left"></i> Retour
-    </button>
-    <div v-if="loading" class="text-center py-8"><i class="fas fa-spinner fa-spin text-2xl" style="color: var(--text-secondary);"></i></div>
-    <div v-else-if="!demande" class="card p-8 text-center" style="color: var(--text-secondary);"><p>Demande introuvable.</p></div>
-    <div v-else>
-      <div class="card p-6 mb-6">
-        <div class="flex items-center justify-between mb-4">
-          <h1 class="section-title mb-0">Demande d'achat</h1>
-          <span :class="['badge', badgeClass[demande.statut]]">{{ statutLabel[demande.statut] || demande.statut }}</span>
-        </div>
-        <div class="grid grid-cols-2 gap-4 text-sm">
-          <div><span class="font-medium">Parcelle :</span> {{ demande.parcelle?.code || 'N/A' }}</div>
-          <div><span class="font-medium">Acheteur :</span> {{ demande.acheteur?.nom || demande.acheteur?.prenom || 'N/A' }}</div>
-          <div><span class="font-medium">Date :</span> {{ new Date(demande.created_at).toLocaleDateString('fr-FR') }}</div>
-          <div v-if="demande.notaire"><span class="font-medium">Notaire :</span> {{ demande.notaire.nom }}</div>
-        </div>
-        <div v-if="demande.message" class="mt-4 p-3 rounded-lg text-sm" style="background: var(--bg-page);">
-          <p class="font-medium mb-1">Message :</p>
-          <p>{{ demande.message }}</p>
-        </div>
-      </div>
-      <div v-if="isVendeur && demande.statut === 'soumise'" class="card p-6">
-        <h3 class="font-medium mb-4">Répondre à la demande</h3>
-        <div class="mb-4">
-          <label class="form-label">Notaire (obligatoire si acceptation)</label>
-          <select v-model="selectedNotaire" class="form-input w-full">
-            <option value="">Sélectionner un notaire</option>
-            <option v-for="n in notaires" :key="n.id" :value="n.user_id || n.id">{{ n.user?.nom || 'Notaire' }}</option>
-          </select>
-        </div>
-        <div class="flex gap-3">
-          <button @click="repondre('acceptee')" :disabled="actionLoading" class="btn-green"><i class="fas fa-check mr-1"></i> Accepter</button>
-          <button @click="repondre('refusee')" :disabled="actionLoading" class="btn-outline" style="color: var(--danger); border-color: var(--danger);"><i class="fas fa-times mr-1"></i> Refuser</button>
-        </div>
-      </div>
-      <div v-if="isNotaire && demande.statut === 'acceptee' && !demande.notaire_id" class="card p-6 mt-4">
-        <h3 class="font-medium mb-4">Réponse du notaire</h3>
-        <p class="text-sm mb-4" style="color: var(--text-secondary);">Acceptez-vous de prendre en charge cette demande ?</p>
-        <div class="flex gap-3">
-          <button @click="notaireRepondre('accepter')" :disabled="actionLoading" class="btn-green"><i class="fas fa-check mr-1"></i> Accepter</button>
-          <button @click="notaireRepondre('refuser')" :disabled="actionLoading" class="btn-outline" style="color: var(--danger); border-color: var(--danger);"><i class="fas fa-times mr-1"></i> Refuser</button>
-        </div>
-      </div>
-      <div v-if="isNotaire && demande.statut === 'acceptee' && demande.notaire_id" class="card p-6 mt-4">
-        <h3 class="font-medium mb-4">Créer le dossier de transaction</h3>
-        <p class="text-sm mb-4" style="color: var(--text-secondary);">Vous avez accepté cette demande. Créez le dossier pour démarrer la transaction.</p>
-        <button @click="router.push(`/notaire/transactions/creer?demande=${demande.id}&parcelle=${demande.parcelle_id}&vendeur=${demande.parcelle?.proprietaire_id}&acheteur=${demande.acheteur_id}`)" class="btn-green"><i class="fas fa-folder-plus mr-1"></i> Créer le dossier de transaction</button>
-      </div>
 
-      <!-- Messages -->
-      <div class="card p-6 mt-4">
-        <h3 class="font-medium mb-4 flex items-center gap-2"><i class="fas fa-comments" style="color: var(--green-tree);"></i> Messages</h3>
-        <div v-if="messages.length" class="space-y-3 mb-4 max-h-60 overflow-y-auto">
-          <div v-for="m in messages" :key="m.id" class="p-3 rounded-lg" style="background: var(--bg-page);">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-xs font-medium" style="color: var(--text-primary);">{{ m.expediteur?.nom || m.expediteur?.prenom || 'Inconnu' }}</span>
-              <span class="text-xs" style="color: var(--text-secondary);">{{ m.created_at ? new Date(m.created_at).toLocaleString('fr-FR') : '' }}</span>
-            </div>
-            <p class="text-sm" style="color: var(--text-primary);">{{ m.contenu || m.message }}</p>
-          </div>
-        </div>
-        <div v-else class="text-sm mb-4" style="color: var(--text-secondary);">Aucun message.</div>
-        <form @submit.prevent="envoyerMessage" class="flex gap-3">
-          <input v-model="messageText" class="form-input flex-1" placeholder="Votre message..." />
-          <button type="submit" :disabled="sending || !messageText.trim()" class="btn-green btn-sm flex items-center gap-1">
-            <i class="fas fa-paper-plane"></i> {{ sending ? '...' : 'Envoyer' }}
-          </button>
-        </form>
+<template>
+  <div class="page-wrap max-w-2xl mx-auto">
+    <div v-if="loading" class="space-y-4">
+      <div class="skeleton h-28 rounded-2xl"></div>
+      <div class="skeleton h-48 rounded-2xl"></div>
+    </div>
+
+    <div v-else-if="!demande" class="card">
+      <div class="empty-state">
+        <div class="empty-icon"><i class="fas fa-cart-shopping"></i></div>
+        <p class="empty-title">Demande introuvable</p>
+        <button @click="goBack(router)" class="btn btn-primary mt-4">Retour</button>
       </div>
     </div>
+
+    <template v-else>
+      <button @click="goBack(router)" class="flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors mb-6">
+        <i class="fas fa-arrow-left text-xs"></i> Mes demandes
+      </button>
+
+      <!-- Header -->
+      <div class="card mb-5">
+        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div>
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <h1 class="font-display font-bold text-xl text-stone-900">
+                {{ demande.parcelle?.titre || 'Parcelle #' + demande.parcelle_id }}
+              </h1>
+              <span class="badge" :class="statutBadge(demande.statut)">{{ demande.statut }}</span>
+            </div>
+            <p class="text-sm text-stone-400">
+              <i class="fas fa-calendar mr-1.5 text-stone-300"></i>
+              Soumise le {{ demande.created_at ? new Date(demande.created_at).toLocaleDateString('fr-FR') : '' }}
+            </p>
+          </div>
+          <!-- Actions vendeur -->
+          <div v-if="isVendeur && demande.statut === 'en_attente'" class="flex gap-2">
+            <button @click="accept" class="btn btn-success btn-sm" :disabled="processing">
+              <div v-if="processing" class="spinner spinner-sm border-white/30 border-t-white"></div>
+              <i v-else class="fas fa-check"></i> Accepter
+            </button>
+            <button @click="reject" class="btn btn-ghost btn-sm text-danger" :disabled="processing">
+              <i class="fas fa-times"></i> Refuser
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Details -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+        <div class="card p-4">
+          <p class="text-xs text-stone-400 font-medium mb-2">Acheteur</p>
+          <div class="flex items-center gap-3">
+            <div class="avatar avatar-sm bg-brand shrink-0">{{ (demande.acheteur?.prenom || 'A')[0] }}</div>
+            <div>
+              <p class="text-sm font-bold text-stone-900">{{ demande.acheteur?.prenom }} {{ demande.acheteur?.nom }}</p>
+              <p class="text-xs text-stone-400">{{ demande.acheteur?.email }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="demande.prix_propose" class="card p-4">
+          <p class="text-xs text-stone-400 font-medium mb-2">Prix proposé</p>
+          <p class="text-2xl font-display font-extrabold text-brand">{{ Number(demande.prix_propose).toLocaleString('fr-FR') }}</p>
+          <p class="text-xs text-stone-400 font-semibold">FCFA</p>
+        </div>
+      </div>
+
+      <!-- Message -->
+      <div v-if="demande.message" class="card">
+        <h3 class="font-display font-bold text-stone-900 mb-3">Message de l'acheteur</h3>
+        <div class="px-4 py-4 bg-stone-50 rounded-xl">
+          <p class="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap italic">"{{ demande.message }}"</p>
+        </div>
+      </div>
+    </template>
   </div>
 </template>

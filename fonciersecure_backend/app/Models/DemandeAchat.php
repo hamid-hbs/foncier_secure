@@ -3,17 +3,27 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class DemandeAchat extends Model
 {
-    protected $table = 'demandes_achat';
+    protected $table = 'demande_achat';
+    public $timestamps = false;
+
+    use SoftDeletes;
 
     protected $fillable = [
-        'parcelle_id',
-        'acheteur_id',
-        'message',
-        'statut',
-        'notaire_id',
+        'parcelle_id', 'acheteur_id', 'vendeur_id', 'statut',
+        'message_acheteur', 'code_secret', 'notaire_id', 'raison_refus',
+        'tentatives_approbation', 'date_soumise', 'date_acceptee',
+        'date_refusee', 'dossier_transaction_id',
+    ];
+
+    protected $casts = [
+        'tentatives_approbation' => 'integer',
+        'date_soumise' => 'datetime',
+        'date_acceptee' => 'datetime',
+        'date_refusee' => 'datetime',
     ];
 
     public function parcelle()
@@ -26,39 +36,33 @@ class DemandeAchat extends Model
         return $this->belongsTo(User::class, 'acheteur_id');
     }
 
+    public function vendeur()
+    {
+        return $this->belongsTo(User::class, 'vendeur_id');
+    }
+
     public function notaire()
     {
         return $this->belongsTo(User::class, 'notaire_id');
     }
 
-    public function documents()
+    public function dossierTransaction()
     {
-        return $this->hasMany(DocumentDemande::class, 'demande_id');
+        return $this->belongsTo(DossierTransaction::class);
     }
 
     public function messages()
     {
-        return $this->hasMany(DemandeMessage::class, 'demande_id');
-    }
-}
-
-class DemandeMessage extends Model
-{
-    protected $table = 'demande_messages';
-
-    protected $fillable = [
-        'demande_id',
-        'sender_id',
-        'contenu',
-    ];
-
-    public function demande()
-    {
-        return $this->belongsTo(DemandeAchat::class, 'demande_id');
+        return $this->morphMany(Message::class, 'messageable');
     }
 
-    public function sender()
+    public function documents()
     {
-        return $this->belongsTo(User::class, 'sender_id');
+        return $this->morphMany(Document::class, 'documentable');
+    }
+
+    public function analyses()
+    {
+        return $this->morphMany(Analyse::class, 'analysable');
     }
 }
